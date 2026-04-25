@@ -10,7 +10,10 @@
     "cmd.exe",
     "powershell.exe",
     "taskmgr.exe",
-    "SystemSettings.exe"
+    "SystemSettings.exe",
+    "cxstudy.exe",
+    "devcpp.exe",
+    "weixin.exe"
   ],
   "urls": [
     "localhost",
@@ -18,7 +21,8 @@
     "baidu.com",
     "bing.com",
     "qq.com",
-    "wechat.com"
+    "wechat.com",
+    "wenku.baidu.com"
   ],
   "browsers": [
     "chrome.exe",
@@ -28,6 +32,7 @@
     "360chrome.exe",
     "2345Explorer.exe",
     "liebao.exe",
-    "SogouExplorer.exe"
+    "SogouExplorer.exe",
+    "quark.exe"
   ]
 }

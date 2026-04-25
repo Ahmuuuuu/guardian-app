@@ -9,6 +9,24 @@ const path = require('path');
 const fs = require('fs');
 const { exec, execSync } = require('child_process');
 const os = require('os');
+const iconvLite = require('iconv-lite');
+
+// ============ 编码工具函数 ============
+function safeLog(prefix, ...args) {
+  const messages = args.map(arg => {
+    if (typeof arg === 'string') return arg;
+    try { return JSON.stringify(arg); } catch (e) { return String(arg); }
+  });
+  console.log(prefix, ...messages);
+}
+
+function safeError(prefix, ...args) {
+  const messages = args.map(arg => {
+    if (typeof arg === 'string') return arg;
+    try { return JSON.stringify(arg); } catch (e) { return String(arg); }
+  });
+  console.error(prefix, ...messages);
+}
 
 // ============ 路径常量（必须在其他代码之前定义） ============
 const DATA_DIR = path.join(__dirname, '..', 'data');
@@ -22,8 +40,8 @@ let remoteConfig = { enabled: false, serverUrl: '', studentId: '', studentName: 
 
 try {
   remote = require('./remote-client');
-} catch(e) {
-  console.warn('[Remote] 远程模块加载失败:', e.message);
+} catch (e) {
+  safeError('[Remote] 远程模块加载失败:', e.message);
 }
 
 function initRemote() {
@@ -31,15 +49,15 @@ function initRemote() {
     if (fs.existsSync(REMOTE_CONFIG_FILE)) {
       remoteConfig = JSON.parse(fs.readFileSync(REMOTE_CONFIG_FILE, 'utf-8'));
     }
-  } catch(e) {}
+  } catch (e) { }
 
   if (!remote || !remoteConfig.enabled || !remoteConfig.serverUrl) return;
 
-  console.log('[Remote] 子机模式已启用，连接:', remoteConfig.serverUrl);
+  safeLog('[Remote] 子机模式已启用，连接:', remoteConfig.serverUrl);
 
   if (remote && remote.on) {
     remote.on('command', (cmd) => {
-      console.log('[Remote] 收到指令:', cmd.action);
+      safeLog('[Remote] 收到指令:', cmd.action);
       switch (cmd.action) {
         case 'toggle-guard':
           if (cmd.enabled && !isGuardActive) startGuard();
@@ -51,7 +69,7 @@ function initRemote() {
           if (mainWindow) mainWindow.webContents.send('whitelist-updated', whitelist);
           break;
         case 'kill-process':
-          exec(`taskkill /F /PID ${cmd.pid}`, () => {});
+          exec(`taskkill /F /PID ${cmd.pid}`, () => { });
           break;
       }
     });
@@ -150,7 +168,7 @@ function initData() {
     whitelist = JSON.parse(fs.readFileSync(WHITELIST_FILE, 'utf-8'));
     config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
   } catch (e) {
-    console.error('配置读取失败，使用默认值', e);
+    safeError('配置读取失败，使用默认值', e);
     whitelist = DEFAULT_WHITELIST;
     config = DEFAULT_CONFIG;
   }
@@ -161,8 +179,10 @@ function getWindowedProcesses() {
   return new Promise((resolve) => {
     // 使用 PowerShell 获取有可见窗口的进程
     // Get-Process 过滤 MainWindowHandle != 0 表示有窗口
-    const ps = `powershell -NoProfile -Command "Get-Process | Where-Object {$_.MainWindowHandle -ne 0} | Select-Object Name,Id,MainWindowTitle | ConvertTo-Json -Compress"`;
-    exec(ps, { timeout: 5000 }, (err, stdout) => {
+    // 使用 -Encoding UTF8 强制输出为 UTF-8
+    const ps = `powershell -NoProfile -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Process | Where-Object {$_.MainWindowHandle -ne 0} | Select-Object Name,Id,MainWindowTitle | ConvertTo-Json -Compress"`;
+    // 使用 utf8 编码直接读取（PowerShell 强制输出 UTF-8）
+    exec(ps, { encoding: 'utf8', timeout: 5000 }, (err, stdout) => {
       if (err || !stdout.trim()) {
         resolve([]);
         return;
@@ -177,6 +197,7 @@ function getWindowedProcesses() {
           title: p.MainWindowTitle || ''
         })));
       } catch (e) {
+        safeError('[Encoding] 进程列表解析失败:', e.message);
         resolve([]);
       }
     });
@@ -210,7 +231,7 @@ function isProcessAllowed(processName) {
 
   // 检查用户白名单
   const allowed = whitelist.processes.some(p => p.toLowerCase() === name) ||
-                  whitelist.browsers.some(b => b.toLowerCase() === name);
+    whitelist.browsers.some(b => b.toLowerCase() === name);
   return { allowed, reason: allowed ? 'whitelist' : 'unknown' };
 }
 
@@ -326,7 +347,7 @@ function createTray() {
   let trayIcon;
   try {
     trayIcon = nativeImage.createFromPath(iconPath);
-  } catch(e) {
+  } catch (e) {
     trayIcon = nativeImage.createEmpty();
   }
 
@@ -341,12 +362,14 @@ function createTray() {
       { type: 'separator' },
       { label: isGuardActive ? '停止守卫' : '启动守卫', click: () => { isGuardActive ? stopGuard() : startGuard(); updateMenu(); } },
       { type: 'separator' },
-      { label: '退出 Guardian', click: () => {
-        stopGuard();
-        if (tray) { tray.destroy(); tray = null; }
-        if (mainWindow) { mainWindow.destroy(); mainWindow = null; }
-        app.exit(0);  // 强制退出，不等待任何异步事件
-      }}
+      {
+        label: '退出 Guardian', click: () => {
+          stopGuard();
+          if (tray) { tray.destroy(); tray = null; }
+          if (mainWindow) { mainWindow.destroy(); mainWindow = null; }
+          app.exit(0);  // 强制退出，不等待任何异步事件
+        }
+      }
     ]);
     tray.setContextMenu(menu);
   };
@@ -437,7 +460,7 @@ ipcMain.handle('bind-student', async (_, joinCode) => {
           } else {
             resolve({ ok: false, msg: r.msg });
           }
-        } catch(e) { resolve({ ok: false, msg: '绑定失败' }); }
+        } catch (e) { resolve({ ok: false, msg: '绑定失败' }); }
       });
     });
     req.on('error', () => resolve({ ok: false, msg: '无法连接管控服务器' }));
