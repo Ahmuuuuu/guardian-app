@@ -25,7 +25,7 @@
 │                                                             │
 │  WebSocket Server ── /guardian-ws                            │
 │                                                             │
-│  Data: teachers.json, rooms.json, sessions.json              │
+│  Data: SQLite (admins/teachers), In-Memory Map (rooms/clients)              │
 └───────────┼────────────────────────────────────────────────┘
             │ WebSocket /guardian-ws
             ▼
@@ -65,7 +65,7 @@
        │     3. { type: "bind",                      │
        │           roomCode: "A7K2F3",                │
        │           studentId: "2024001",              │
-       │           studentName: "张三",               │
+       │           name: "张三",               │
        │           hostname: "PC-01" } ─────────────► │
        │                                              │
        │                    验证 roomCode              │
@@ -74,7 +74,7 @@
        │                                              │
        │  ◄── 4. { type: "bind-ack",                 │
        │           ok: true,                          │
-       │           roomId: "r_301" }                  │
+       │           roomId: "r_301", roomName: "301 机房" }                  │
        │           (或 { ok: false, msg: "..." })     │
        │                                              │
        │  ═══════ 考试进行中 ═══════                  │
@@ -110,7 +110,7 @@
 
 | 序号 | type | 发送时机 | 载荷 | 服务端响应 |
 |------|------|----------|------|-----------|
-| 1 | `bind` | 连接后 30s 内 | `{ roomCode, studentId, studentName, hostname }` | → `bind-ack` |
+| 1 | `bind` | 连接后 30s 内 | `{ roomCode, studentId, name, hostname }` | → `bind-ack` |
 | 2 | `heartbeat` | 每 5s | `{ guardActive, processCount, violations[] }` | → `heartbeat-ack` |
 | 3 | `violation-log` | 发现违规时 | `{ violations[] }` | 无 |
 
@@ -119,7 +119,7 @@
 | 序号 | type | 发送时机 | 载荷 | 说明 |
 |------|------|----------|------|------|
 | 1 | `welcome` | WS 连接成功 | `{ clientId }` | 标识该连接 |
-| 2 | `bind-ack` | bind 处理完 | `{ ok, roomId }` 或 `{ ok:false, msg }` | — |
+| 2 | `bind-ack` | bind 处理完 | `{ ok, roomId, roomName }` 或 `{ ok:false, msg }` | — |
 | 3 | `heartbeat-ack` | 收到 heartbeat | `{}` | 仅确认 |
 | 4 | `toggle-guard` | 教师远程开关 | `{ enabled: boolean }` | — |
 | 5 | `update-whitelist` | 教师下发白名单 | `{ whitelist: RoomWhitelist }` | — |
@@ -137,7 +137,7 @@
   └─ 启动 30s bind 超时定时器
        │
        ├─ 30s 内收到 bind → 清除定时器
-       │     ├─ 验证 roomCode → 查 rooms.json
+       │     ├─ 验证 roomCode → 查内存 store
        │     ├─ 检查 studentId 是否已在该 room 中在线
        │     ├─ 记录 IP 和绑定时间
        │     ├─ clients[clientId] 更新 studentId + roomId
@@ -154,7 +154,7 @@
 | WS 断开 | 服务端清理 clients，教师端实时看到离线 |
 | 服务端宕机 | 学生端 5s 自动重连，无限重试 |
 | bind 失败 (roomCode 无效) | 返回 `{ ok: false, msg: "房间码无效" }`，不关闭连接，允许重试 |
-| studentId 重复绑定 | 返回 `{ ok: false, msg: "该学号已在本房间在线" }` |
+| studentId 重复绑定 | 踢掉旧连接，新连接接管 |
 | 心跳超时 120s | 服务端主动 terminate，清除 clients |
 
 ---
@@ -165,7 +165,7 @@
 
 - **Base URL**: `http://{server}:3847`
 - **Content-Type**: `application/json`
-- **认证**: 除 login/register 外，所有请求 header 带 `x-token`
+- **认证**: 除 login 外，所有请求 header 带 `x-token`
 - **统一响应**: `{ ok: boolean, ...数据 }` 或 `{ ok: false, msg: string }`
 
 ### 3.2 API 路径总表
@@ -174,10 +174,9 @@
 
 | 方法 | 路径 | 认证 | 说明 |
 |------|------|------|------|
-| POST | `/api/admin/login` | 否 | 教师登录 |
-| POST | `/api/admin/register` | 否 | 教师注册 |
+| POST | /api/admin/login | 否 | 管理员登录 |
 
-登录/注册返回: `{ ok: true, token: string, teacherId: string, username: string }`
+登录返回: `{ ok: true, token: string, role: "admin", username: string }`
 
 #### 房间管理 (需认证)
 
@@ -218,8 +217,7 @@
     ]
   },
   "violations": {
-    "maxAllowed": 0,
-    "notifyTeacher": true
+    "maxAllowed": 0
   }
 }
 ```

@@ -8,8 +8,9 @@
 
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const { getServerEnv } = require('../utils/load-env');
 
-const SERVER_URL = process.env.GUARDIAN_SERVER_URL || 'http://localhost:3847';
+const SERVER_URL = getServerEnv('GUARDIAN_SERVER_URL', 'http://localhost:3847');
 
 function createWindow() {
   const win = new BrowserWindow({

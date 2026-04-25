@@ -10,289 +10,206 @@
 | 教室数量 | 几十间 |
 | 总并发连接 | 2,000 - 10,000 WS |
 | Server 部署 | **服务器**，非教师笔记本 |
-| 教师端 | 浏览器 + Electron 桌面版（也是 WS Client） |
+| 教师端 | 浏览器 + Electron 桌面版（HTTP + 轮询） |
 
 ---
 
-## 2. 核心角色
+## 2. 角色定义
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     管控服务器 (guardian-server)                   │
-│                                                                  │
-│  HTTP Layer                WS Layer          Storage Layer       │
-│  ┌──────────┐       ┌───────────────┐       ┌───────────────┐   │
-│  │ REST API │       │  WS Gateway   │       │  SQLite /      │   │
-│  │ (Express)│       │  /guardian-ws │       │  PostgreSQL?   │   │
-│  │          │       │               │       │  Redis?         │   │
-│  │ 认证     │       │ 消息路由       │       │                │   │
-│  │ 教师CRUD │       │ 房间管理       │       │                │   │
-│  │ 静态页   │       │ 广播/指令      │       │                │   │
-│  └────┬─────┘       └──────┬────────┘       └────────────────┘   │
-└───────┼────────────────────┼────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                     管控服务器 (guardian-server)                 │
+│                                                               │
+│  HTTP Layer               WS Layer          Storage Layer     │
+│  ┌──────────┐       ┌───────────────┐       ┌────────────┐   │
+│  │ REST API │       │  WS Gateway   │       │  SQLite    │   │
+│  │ (Express)│       │  /guardian-ws │       │  (admins + │   │
+│  │          │       │               │       │   teachers)│   │
+│  │ admin 认证│       │  bind / 心跳   │       │            │   │
+│  │ 教师 CRUD │       │ 违规上报       │       │  In-Memory │   │
+│  │ 房间 CRUD │       │ 指令下发       │       │  Map       │   │
+│  │ 静态页    │       │               │       │  (rooms +  │   │
+│  │          │       │               │       │   clients) │   │
+│  └────┬─────┘       └──────┬────────┘       └────────────┘   │
+└───────┼────────────────────┼─────────────────────────────────┘
         │ HTTP               │ WS
-        │                    │
-─────── ┼ ─ ─ ─ ─ ─ ─ ─ ─ ─┼ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-        │                    所有端都是 client，角色不同
         │                    │
    ┌────┴────────┐    ┌──────┴──────────┐    ┌────────────────┐
    │ 教师端(浏览器)│    │ 教师端(Electron) │    │ 学生端(Electron) │
    │             │    │                 │    │                │
-   │ HTTP REST   │    │ HTTP + WS       │    │ WS 直连         │
-   │ (CRUD操作)   │    │ (实时监控)       │    │ (心跳+值守循环)  │
-   │ WS 订阅通知  │    │                 │    │                │
+   │ HTTP REST   │    │ HTTP + 轮询     │    │ WS 直连         │
+   │ (CRUD+轮询)  │    │ (实时监控)       │    │ (心跳+守卫循环)  │
    └─────────────┘    └─────────────────┘    └────────────────┘
 ```
 
-### 角色定义
+### 角色
 
 | 角色 | 连接方式 | 职责 |
 |------|---------|------|
-| **管控服务器** | — | 认证、房间管理、消息路由、状态聚合 |
-| **教师端** | HTTP + WS | 创建房间、下发策略、实时查看状态 |
-| **学生端** | WS | 值守循环、心跳上报、接收指令 |
-
-> 目前没有 admin。教师就是教师，注册后管理自己的房间和学生。
+| **admin**（系统管理员） | HTTP | 管理教师账号，查看全局房间 |
+| **teacher**（教师） | HTTP | 创建房间、管理学生和白名单、下发指令 |
+| **student**（学生机） | WS | 守卫循环、心跳上报、接收指令 |
 
 ### 通信模式
 
 ```
-教师端 ←── HTTP (CRUD) ──→ 管控服务器 ←── WS (心跳+指令) ──→ 学生端
-       ←── WS (实时推送) ──→         ←── WS (指令下发) ──→
+admin ── HTTP ──→ 管控服务器 ←── HTTP (轮询) ── teacher
+                        ↑
+student ── WS (心跳+上报) ──┘
+      └── WS (指令下发) ←──┘
 ```
-
-教师端之所以需要两条通道：
-- **HTTP**：房间 CRUD、登录注册、批量操作
-- **WS**：接收子机上下线实时推送、违规实时通知
 
 ---
 
 ## 3. 数据量 & 读写特征
 
-### 3.1 存储层数据
+### 3.1 持久层数据（SQLite）
 
 | 数据 | 总量 | 写入频率 | 读取频率 | 一致性 |
 |------|------|---------|---------|--------|
-| 教师账号 | 几十 - 几百 | 极低（注册） | 低（登录） | 强一致 |
-| 房间配置 | 几百 - 几千 | 低（创建/修改） | 中（bind 时查） | 强一致 |
-| 错误! 请检查重试次数和参数 | 几万 | 低（考试结束归档） | 低 | 最终一致 |
+| 管理员账号 | 1 | 极低 | 低（登录） | 强一致 |
+| 教师账号 | 几十 - 几百 | 极低（管理员创建） | 低（登录） | 强一致 |
 
-### 3.2 Runtime 数据（纯内存，不落盘）
+### 3.2 Runtime 数据（纯内存）
 
 | 数据 | 总量 | 写入频率 | 读取频率 |
 |------|------|---------|---------|
-| 在线子机 | 2,000 - 10,000 | 每 5s/heartbeat | 高（教师查看） |
-| 心跳时间戳 | 同上 | 每 5s | 低（清理超时） |
+| 房间 | 几百 - 几千 | 低（创建/更新） | 中（bind 时查） |
+| 学生名单 | 几万 | 低（批量导入） | 中 |
+| 在线子机 | 2,000 - 10,000 | 每 5s/heartbeat | 高（教师轮询查看） |
 | 违规缓存 | 随时段波动 | 发现即写 | 中 |
 
-**关键矛盾**: 几千个 WS 连接 × 每 5s 一次心跳 = **400 - 2,000 次/秒 的 Map 写入**。这是纯内存操作，Node.js 单进程可以处理（V8 的 Map 读写在百万 ops/s 级别）。但 ws 做消息解析和 JSON 序列化也有开销。
-
-**WS 连接开销估算**:
-- 每个连接保活 ≈ 50KB 内存（ws 对象 + TCP 缓冲区）
-- 10,000 连接 ≈ 500MB 内存，在承受范围内
-- 单 Node.js 进程 10k 连接，用 `--max-old-space-size=4096` 可以跑
-
----
-
-## 4. 存储方案对比
-
-### 4.1 SQLite
+### 单进程承载能力
 
 ```
-优点:
-  ● 单文件，零配置，无需安装
-  ● ACID 事务
-  ● better-sqlite3 同步 API，代码简单
-  ● 读性能极高（纯内存页）
-
-缺点:
-  ● 写并发受限（串行 WAL 模式约 100 事务/s）
-  ● 不支持网络访问（只有本进程能读）
-  ● 不适合作为跨进程共享状态
-
-适合: 单服务器、单进程场景。如果未来 Server 做集群，SQLite 是瓶颈。
-```
-
-### 4.2 PostgreSQL / MySQL
-
-```
-优点:
-  ● 成熟的关系型数据库，支持网络访问
-  ● 支持连接池，多进程/多服务器共享
-  ● 强一致、事务隔离级别完整
-  ● 可扩展（读写分离、分片）
-
-缺点:
-  ● 需要安装和服务管理
-  ● 结构变更需要 migration
-  ● 对于简单的房间配置/教师数据来说，功能过剩
-
-适合: 多服务器、需要长期运维的生产部署。
-```
-
-### 4.3 Redis
-
-```
-优点:
-  ● 纯内存，读写极快（100k+ ops/s）
-  ● 丰富的数据结构：Map、Set、Pub/Sub、SortedSet
-  ● 内建 Pub/Sub → 天然适合 WS 事件广播
-  ● 支持持久化（RDB/AOF）
-  ● 支持集群
-
-在此场景的核心用途:
-  1. 在线状态存储: HSET rooms:{id}:clients studentId → clientInfo
-  2. Pub/Sub: 教师下发指令 → PUBLISH room:{id}:cmd → WS 进程收到后下发
-  3. 心跳超时清理: ZREM room:{id}:heartbeats 按时间戳批量删除
-
-缺点:
-  ● 内存占用（数据全在内存，10k 在线客户 ≈ 几十 MB，可忽略）
-  ● 需要独立进程
-  ● 持久化不是强项（RDB 有丢数据窗口）
+- 每个 WS 连接保活 ≈ 50KB 内存
+- 10,000 连接 ≈ 500MB 内存
+- 心跳 5s × 10,000 ≈ 2,000 次/秒 Map 写入（V8 Map O(1)，可承受）
+- Node.js 单进程 `--max-old-space-size=4096` 可跑 10k+ 连接
 ```
 
 ---
 
-## 5. 分流 / 缓冲分析
+## 4. 存储方案
 
-### 5.1 什么时候需要分流
-
-| 场景 | 分流需求 | 策略 |
-|------|---------|------|
-| ≤ 5,000 连接 | 不需要 | 单 Node.js 进程 + `--max-old-space-size=4096` |
-| 5,000 - 20,000 | 可能需要 | 按 roomId 哈希分发 → 每个进程负责一组房间 |
-| > 20,000 | 必须 | Nginx WS 负载均衡 + 多进程 + Redis Pub/Sub 同步 |
-
-初始阶段（几千连接），单进程足够。后续扩容路径：
-
-```
-阶段 1: 单进程单服务器
-  进程1 ─── SQLite + Map
-
-阶段 2: 多进程单服务器（Cluster 模式）
-  主进程 ── 分发 WS 连接
-  进程1  ─── rooms: 1-100
-  进程2  ─── rooms: 101-200
-  共享 SQLite（读多写少，压力不大）
-
-阶段 3: 多服务器
-  服务器A ─── rooms: 1-200
-  服务器B ─── rooms: 201-400
-  Redis Pub/Sub 跨服务器广播
-  PostgreSQL 共享持久化
-```
-
-### 5.2 什么时候需要缓冲
-
-| 场景 | 需要缓冲 | 方案 |
-|------|---------|------|
-| 违规上报写入 DB | **需要** | 每个违规都 INSERT 太频繁，攒一批批量写 |
-| 心跳更新 | 不需要 | 纯内存 Map 操作，O(1) |
-| 指令下发 | 不需要 | 直接 WS.send()，等保活确认即可 |
-
-**违规缓冲策略**:
-
-```
-学生上报违规
-    │
-    ├─ Map 追加 (O(1)，立即)
-    │
-    └─ 攒批缓冲区
-         ├─ 每 10s 或攒满 100 条 → 一次 batch INSERT
-         └─ 减少 90%+ DB 写入
-```
-
----
-
-## 6. 推荐方案
-
-### 小规模（≤ 1,000 连接，单机房场景）
+### 实际采用方案
 
 | 组件 | 方案 | 原因 |
 |------|------|------|
-| 持久化 | **SQLite** | 零配置，单文件，够用 |
-| Runtime 状态 | **In-Memory Map** | 简单直接 |
-| WS 广播 | **直接 Map.forEach + ws.send()** | 几千连接量级没问题 |
-| 进程模型 | **单进程** | — |
+| 持久化（账号） | **SQLite** (better-sqlite3) | 零配置，单文件，ACID，admit/teacher 读写量低 |
+| Runtime 状态 | **In-Memory Map** | 简单直接，房间/client 数据随进程生命周期 |
+| WS 广播 | **Map.forEach + ws.send()** | 几千连接量级没问题，无跨进程需求 |
+| 违规记录 | **内存数组保留 100 条/客户端** | 临时缓存，不落盘 |
+| 进程模型 | **单进程** | 当前规模足够 |
 
-### 中大规模（≥ 1,000 连接，多机房 + 生产部署）
+DB 路径：`server/data/guardian.db`，首次启动自动建表 + seed 默认管理员。
 
-| 组件 | 方案 | 原因 |
-|------|------|------|
-| 持久化 | **PostgreSQL** | 网络访问、连接池、生产级可靠 |
-| Runtime 状态 | **Redis** | 快速读写、Pub/Sub、多进程共享 |
-| WS 广播 | **Redis Pub/Sub → WS 进程转发** | 跨进程/跨服务器通信 |
-| 违规写入 | **攒批缓冲区 → 批量 INSERT** | 减少 DB 压力 |
-| 进程模型 | **多进程 Cluster / 多服务器** | 水平扩展 |
+### 未来扩容路径
 
-### 模块结构
+| 阶段 | 存储变化 | 广播变化 | 进程模型 |
+|------|---------|---------|---------|
+| 阶段 1（当前） | SQLite + Map | forEach send | 单进程 |
+| 阶段 2 | + Redis (rooms/clients) | Redis Pub/Sub | 多进程 Cluster |
+| 阶段 3 | + PostgreSQL (全量) | 同上 | 多服务器 |
+
+---
+
+## 5. 模块结构（当前实现）
 
 ```
 guardian-server/
 ├── src/
-│   ├── server.js           # 入口
-│   ├── app.js              # Express 挂载
-│   │
-│   ├── gateway/            # WS 接入层
-│   │   ├── ws-server.js    # WS 服务 + 消息分发
-│   │   └── room-manager.js # 房间状态管理（房间内在线客户维护）
-│   │
-│   ├── service/            # 业务逻辑
-│   │   ├── auth.js         # 教师注册/登录
-│   │   ├── room.js         # 房间 CRUD
-│   │   ├── guardian.js     # 指令下发（toggle-guard, update-whitelist）
-│   │   └── violation.js    # 违规处理 + 攒批缓冲
-│   │
-│   ├── store/              # 数据访问层
-│   │   ├── db.js           # SQLite / PostgreSQL 适配器
-│   │   └── cache.js        # Redis 客户端
-│   │
-│   └── utils/              # 工具
+│   ├── server.js              # 入口：创建 HTTP + WS 服务
+│   └── app.js                 # Express：挂载中间件、路由、静态文件
 │
-├── package.json
-└── data/                   # SQLite 文件（如果使用 SQLite 模式）
+├── router/
+│   ├── admin.js               # POST /api/admin/login + 教师 CRUD
+│   ├── teacher.js             # POST /api/teacher/login + 密码修改
+│   ├── rooms.js               # /api/rooms 房间 CRUD + 指令下发
+│   └── student.js             # POST /api/student/bind
+│
+├── service/
+│   ├── account/
+│   │   └── account-service.js         # admin & teacher 账号验证/CRUD
+│   ├── runtime/
+│   │   └── runtime-state-service.js   # 房间/客户端状态业务：CRUD、广播、守卫启停
+│   └── gateway/
+│       └── ws-gateway.js              # WebSocket 接入 + 消息分发
+│
+├── utils/
+│   ├── auth.js                # Token (HMAC-SHA256) + requireAuth/requireRole
+│   └── storage.js             # (未使用，原 JSON 文件读写)
+│
+├── store/
+│   └── memory.js              # 全局内存状态：rooms Map, clients Map, 接入码索引
+│
+├── sql/
+│   ├── db.js                  # better-sqlite3 封装
+│   ├── schema.sql             # admins + teachers 建表
+│   └── seed.sql               # 默认管理员 seed
+│
+├── assets/
+│   └── control.html           # 教师端浏览器 UI
+│
+├── desktop/
+│   ├── main.js                # 教师端 Electron 桌面版
+│   └── icon.png
+│
+├── data/                      # 运行时数据目录
+│   └── guardian.db            # SQLite 数据库文件 (自动创建)
+│
+└── package.json
 ```
 
 ---
 
-## 7. 教师端技术栈
+## 6. 教师端技术栈
 
 教师端是**浏览器 + Electron 桌面版**双形态。
 
 | 层面 | 方案 |
 |------|------|
-| UI 框架 | **原生 HTML/CSS/JS**（保持与学生端一致，复用现有 control.html） |
-| 桌面容器 | **Electron**（复用现有 Electron 技术栈） |
-| HTTP 请求 | **fetch**，无需 axios |
-| WS 客户端 | **原生 WebSocket API** |
-| 状态管理 | 无框架，DOM 驱动 |
-| 打包 | **electron-builder** |
+| UI 框架 | **原生 HTML/CSS/JS** |
+| 桌面容器 | **Electron**（仅封装 browser window） |
+| HTTP 请求 | **fetch** |
+| 状态获取 | **轮询（每 3s）**，暂未实现 WS 推送 |
+| 打包 | electron-builder |
 
-教师端 Electron 只封装一个 browser window 加载 `http://server:3847`，不做任何业务逻辑。逻辑全在 Web 页面里。
-
-### 通信通道选择
-
-| 操作 | 通道 | 原因 |
-|------|------|------|
-| 登录注册 | HTTP POST | 请求-响应模式，不需要 WS |
-| 房间 CRUD | HTTP REST | 同上 |
-| 学生端状态监控 | **WS** | 需要实时推送：上下线、违规 |
-| 下发指令 | HTTP 或 WS | HTTP 更可靠（有响应），WS 更快 |
-
-方案：**HTTP 做 CRUD，WS 做订阅**。教师 WS 连接后订阅自己的房间，收到推送更新 UI。
+教师端 Electron 只封装一个 browser window 加载 `http://server:3847`，不做任何业务逻辑。
 
 ---
 
-## 8. 命名规范（概念层级）
+## 7. 认证体系
 
-| 当前命名（有问题） | 建议命名 | 说明 |
-|------------------|---------|------|
-| `client/` | `student-app/` | 学生端 Electron 应用 |
-| `remote-client.js` | `ws-client.js` | 通用 WS 客户端模块 |
-| `admin` | `teacher` | 教师账号，无 admin 概念 |
-| `server/` | 保留 | 管控服务器 |
-| `public/` | `web/` | 教师端 Web UI 静态文件 |
-| — | `teacher-app/` | 教师端 Electron 桌面版 |
+| 机制 | 实现 |
+|------|------|
+| Token 格式 | HMAC-SHA256(base64url(JSON payload) + 签名) |
+| 传输方式 | Header `x-token` |
+| 载荷 | `{ role, username/teacherId, staffId, iat }` |
+| 验证 | 服务端 `verifyToken()` 验签 + `requireRole()` 检查角色 |
+| 密码存储 | SHA256 哈希（无 salt，当前阶段使用） |
 
-> **命名原则**: 概念名 = 业务角色，不反映技术实现。
-> 教师就是 teacher，学生就是 student，不存在 "admin" 或 "remote" 这类技术描述。
+### 路由保护模式
+
+```js
+router.post('/login', ...)                    // 公开
+router.use(...requireAdmin)                   // 以下全部需 admin 角色
+// 或
+router.use(...requireTeacher)                 // 以下全部需 teacher 角色
+```
+
+---
+
+## 8. 命名规范
+
+| 目录/文件 | 说明 |
+|-----------|------|
+| `client/` | 学生端 Electron 应用 |
+| `server/` | 管控服务器 |
+| `server/assets/` | 教师端 Web UI 静态文件 |
+| `server/desktop/` | 教师端 Electron 桌面版 |
+| `server/router/` | Express 路由（按业务角色拆分） |
+| `server/service/` | 业务逻辑层 |
+| `server/store/` | 数据访问层（内存 Map） |
+| `server/sql/` | SQLite 数据库层 |
+| `server/utils/` | 工具（认证、存储辅助） |

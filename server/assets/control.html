@@ -1,456 +1,1980 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Guardian 管控中心</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0f1117;--card:#1a1d27;--border:#2a2d3a;--accent:#4f8ef7;--green:#22c55e;--red:#ef4444;--yellow:#f59e0b;--text:#e2e8f0;--muted:#64748b;font-family:'Segoe UI',system-ui,sans-serif}
-body{background:var(--bg);color:var(--text);min-height:100vh}
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Guardian 管控中心</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      :root {
+        --bg: #f5f7fa;
+        --card: #ffffff;
+        --border: #dde3ea;
+        --accent: #2563eb;
+        --accent-light: #dbeafe;
+        --green: #16a34a;
+        --red: #dc2626;
+        --yellow: #d97706;
+        --text: #1e293b;
+        --muted: #64748b;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        font-size: 14px;
+      }
 
-/* 登录 */
-#loginScreen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:9999}
-.login-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:48px 40px;width:380px;text-align:center}
-.login-box h1{font-size:24px;margin-bottom:8px;color:#fff}
-.login-box p{color:var(--muted);font-size:13px;margin-bottom:32px}
-.login-box input{display:block;width:100%;padding:12px 16px;background:#0f1117;border:1px solid var(--border);border-radius:8px;color:#fff;font-size:14px;margin-bottom:12px;outline:none}
-.login-box input:focus{border-color:var(--accent)}
-.login-box button{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-weight:600;transition:.2s}
-.login-box button:hover{background:#3b7de8}
-.login-box .error{color:var(--red);font-size:13px;margin-top:12px;display:none}
+      /* 登录 */
+      #loginScreen {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg);
+        z-index: 9999;
+      }
+      .login-box {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 40px;
+        width: 400px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+      }
+      .login-box h1 {
+        font-size: 22px;
+        text-align: center;
+        color: var(--text);
+        margin-bottom: 4px;
+      }
+      .login-box .sub {
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 24px;
+      }
+      .login-tabs {
+        display: flex;
+        margin-bottom: 20px;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+      }
+      .login-tabs button {
+        flex: 1;
+        padding: 10px;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 13px;
+        transition: 0.2s;
+      }
+      .login-tabs button.active {
+        background: var(--accent);
+        color: #fff;
+      }
+      .login-box input {
+        display: block;
+        width: 100%;
+        padding: 11px 14px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-size: 14px;
+        margin-bottom: 10px;
+        outline: none;
+      }
+      .login-box input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-light);
+      }
+      .login-box .btn-login {
+        width: 100%;
+        padding: 11px;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 15px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .login-box .btn-login:hover {
+        background: #1d4ed8;
+      }
+      .login-box .error {
+        color: var(--red);
+        font-size: 13px;
+        margin-top: 10px;
+        display: none;
+        text-align: center;
+      }
 
-/* 主界面 */
-#mainApp{display:none;height:100vh;overflow:hidden}
-.header{background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;height:56px;gap:16px}
-.header h2{font-size:16px;font-weight:600;color:#fff;flex:1}
-.header .online-count{background:var(--accent);color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}
-.header button{background:#0f1117;border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px}
-.header button:hover{border-color:var(--accent)}
+      /* 主界面 */
+      #mainApp {
+        display: none;
+        height: 100vh;
+        overflow: hidden;
+      }
+      .header {
+        background: var(--card);
+        border-bottom: 1px solid var(--border);
+        padding: 0 20px;
+        display: flex;
+        align-items: center;
+        height: 52px;
+        gap: 12px;
+        box-shadow: var(--shadow);
+      }
+      .header h2 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .header .role-badge {
+        padding: 2px 10px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .role-badge.admin {
+        background: var(--accent);
+        color: #fff;
+      }
+      .role-badge.teacher {
+        background: var(--green);
+        color: #fff;
+      }
+      .header .spacer {
+        flex: 1;
+      }
+      .header select {
+        padding: 6px 10px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 12px;
+        outline: none;
+        max-width: 200px;
+      }
+      .header .online-badge {
+        background: var(--green);
+        color: #fff;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .header .logout-btn {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 6px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .header .logout-btn:hover {
+        border-color: var(--red);
+        color: var(--red);
+      }
 
-.main-layout{display:flex;height:calc(100vh - 56px)}
+      .main-layout {
+        display: flex;
+        height: calc(100vh - 52px);
+      }
+      .sidebar {
+        width: 180px;
+        background: var(--card);
+        border-right: 1px solid var(--border);
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex-shrink: 0;
+      }
+      .nav-btn {
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        cursor: pointer;
+        text-align: left;
+        transition: 0.2s;
+      }
+      .nav-btn:hover {
+        background: #eef2f6;
+        color: var(--text);
+      }
+      .nav-btn.active {
+        background: var(--accent);
+        color: #fff;
+      }
 
-/* 左侧工具栏 */
-.sidebar{width:200px;background:var(--card);border-right:1px solid var(--border);padding:12px;display:flex;flex-direction:column;gap:4px}
-.nav-btn{padding:10px 14px;border-radius:6px;border:none;background:transparent;color:var(--muted);font-size:13px;cursor:pointer;text-align:left;transition:.2s}
-.nav-btn:hover{background:#0f1117;color:var(--text)}
-.nav-btn.active{background:var(--accent);color:#fff}
+      .content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 20px;
+      }
+      .tab {
+        display: none;
+      }
+      .tab.active {
+        display: block;
+      }
+      .section-title {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .section-title .hint {
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 400;
+      }
 
-/* 内容区 */
-.content{flex:1;overflow-y:auto;padding:20px}
-.section-title{font-size:15px;font-weight:600;margin-bottom:16px;color:#fff;display:flex;align-items:center;gap:8px}
-.section-title span{font-size:12px;color:var(--muted);font-weight:400}
+      /* 统计卡片 */
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .stat-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        text-align: center;
+        box-shadow: var(--shadow);
+      }
+      .stat-card .num {
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .stat-card .label {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .stat-card.green .num {
+        color: var(--green);
+      }
+      .stat-card.red .num {
+        color: var(--red);
+      }
+      .stat-card.accent .num {
+        color: var(--accent);
+      }
+      .stat-card.yellow .num {
+        color: var(--yellow);
+      }
 
-/* 卡片网格 */
-.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:24px}
+      /* 房间卡片 */
+      .room-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .room-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        cursor: pointer;
+        transition: 0.2s;
+        box-shadow: var(--shadow);
+      }
+      .room-card:hover {
+        border-color: var(--accent);
+        box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+      }
+      .room-card.selected {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-light);
+      }
+      .room-card .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      .room-card .name {
+        font-weight: 600;
+        color: var(--text);
+        font-size: 14px;
+      }
+      .room-card .join-code {
+        font-family: monospace;
+        font-size: 12px;
+        background: var(--accent-light);
+        padding: 2px 8px;
+        border-radius: 4px;
+        color: var(--accent);
+        letter-spacing: 1px;
+      }
+      .room-card .meta {
+        display: flex;
+        gap: 12px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .room-card .meta span {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
 
-/* 子机卡片 */
-.client-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;position:relative;transition:.2s}
-.client-card:hover{border-color:var(--accent)}
-.client-card .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
-.client-card .name{font-size:15px;font-weight:600;color:#fff}
-.client-card .seat{font-size:12px;color:var(--muted)}
-.client-card .ip{font-size:12px;color:var(--muted);font-family:monospace}
-.client-card .status-row{display:flex;gap:6px;margin:8px 0}
-.badge{padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600}
-.badge.online{background:#22c55e22;color:var(--green)}
-.badge.offline{background:#64748b22;color:var(--muted)}
-.badge.guarding{background:#4f8ef722;color:var(--accent)}
-.badge.idle{background:#64748b22;color:var(--muted)}
-.client-card .violations{font-size:12px;color:var(--red);margin-top:6px}
-.client-card .actions{display:flex;gap:6px;margin-top:10px}
-.client-card .actions button{flex:1;padding:6px;font-size:12px;border-radius:5px;border:none;cursor:pointer;font-weight:600}
-.btn-on{background:#22c55e22;color:var(--green)}
-.btn-off{background:#ef444422;color:var(--red)}
-.btn-kill{background:#f59e0b22;color:var(--yellow)}
+      /* 子机卡片网格 */
+      .client-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .client-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 14px;
+        transition: 0.2s;
+        box-shadow: var(--shadow);
+      }
+      .client-card:hover {
+        border-color: var(--accent);
+        box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+      }
+      .client-card .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 6px;
+      }
+      .client-card .cname {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .client-card .cinfo {
+        font-size: 11px;
+        color: var(--muted);
+        font-family: monospace;
+      }
+      .client-card .cbadges {
+        display: flex;
+        gap: 4px;
+        margin: 6px 0;
+      }
+      .badge {
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .badge.online {
+        background: #dcfce7;
+        color: var(--green);
+      }
+      .badge.offline {
+        background: #f1f5f9;
+        color: var(--muted);
+      }
+      .badge.guarding {
+        background: var(--accent-light);
+        color: var(--accent);
+      }
+      .badge.idle {
+        background: #f1f5f9;
+        color: var(--muted);
+      }
+      .badge.violation {
+        background: #fef2f2;
+        color: var(--red);
+      }
+      .client-card .violations {
+        font-size: 11px;
+        color: var(--red);
+        margin: 4px 0;
+        max-height: 40px;
+        overflow: hidden;
+      }
+      .client-card .actions {
+        display: flex;
+        gap: 4px;
+        margin-top: 8px;
+      }
+      .client-card .actions button {
+        flex: 1;
+        padding: 5px;
+        font-size: 11px;
+        border-radius: 5px;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        transition: 0.2s;
+      }
+      .btn-on {
+        background: #dcfce7;
+        color: var(--green);
+      }
+      .btn-on:hover {
+        background: #bbf7d0;
+      }
+      .btn-off {
+        background: #fef2f2;
+        color: var(--red);
+      }
+      .btn-off:hover {
+        background: #fecaca;
+      }
+      .btn-kill {
+        background: #fffbeb;
+        color: var(--yellow);
+      }
+      .btn-kill:hover {
+        background: #fef3c7;
+      }
 
-/* 学生管理 */
-.student-list{margin-top:8px}
-.student-row{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-bottom:6px}
-.student-row .info{flex:1}
-.student-row .name{font-weight:600;font-size:14px}
-.student-row .meta{font-size:12px;color:var(--muted)}
-.student-row .code{font-family:monospace;font-size:13px;background:#0f1117;padding:4px 10px;border-radius:4px;color:var(--accent);letter-spacing:2px}
-.student-row .del-btn{background:transparent;border:1px solid var(--border);color:var(--red);padding:4px 10px;border-radius:5px;cursor:pointer;font-size:12px}
-.student-row .del-btn:hover{background:var(--red);color:#fff;border-color:var(--red)}
+      /* 空状态 */
+      .empty {
+        text-align: center;
+        padding: 40px;
+        color: var(--muted);
+        font-size: 13px;
+      }
 
-.add-student{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
-.add-student input{width:calc(33.33% - 8px);padding:8px 12px;background:#0f1117;border:1px solid var(--border);border-radius:6px;color:#fff;font-size:13px;outline:none}
-.add-student input:focus{border-color:var(--accent)}
-.add-student button{width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;margin-top:10px;font-weight:600}
+      /* 表单 */
+      .form-group {
+        margin-bottom: 12px;
+      }
+      .form-group label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      .form-row {
+        display: flex;
+        gap: 8px;
+      }
+      .form-row input,
+      .form-row select {
+        flex: 1;
+      }
+      input,
+      select,
+      textarea {
+        padding: 9px 12px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 13px;
+        outline: none;
+      }
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-light);
+      }
+      textarea {
+        font-family: inherit;
+        resize: vertical;
+      }
+      .btn {
+        padding: 9px 18px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        transition: 0.2s;
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn-primary:hover {
+        background: #1d4ed8;
+      }
+      .btn-danger {
+        background: var(--red);
+        color: #fff;
+      }
+      .btn-danger:hover {
+        background: #b91c1c;
+      }
+      .btn-sm {
+        padding: 5px 10px;
+        font-size: 11px;
+      }
+      .btn-outline {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+      .btn-outline:hover {
+        border-color: var(--accent);
+        background: #f8fafc;
+      }
 
-/* 统计 */
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
-.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
-.stat-card .num{font-size:28px;font-weight:700;color:#fff}
-.stat-card .label{font-size:12px;color:var(--muted);margin-top:4px}
-.stat-card.green .num{color:var(--green)}
-.stat-card.red .num{color:var(--red)}
+      /* 表格 */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th,
+      td {
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      td {
+        color: var(--text);
+      }
+      tr:hover {
+        background: #f8fafc;
+      }
 
-/* 白名单 */
-.whitelist-editor textarea{width:100%;height:300px;background:#0f1117;border:1px solid var(--border);border-radius:8px;color:var(--accent);font-family:monospace;font-size:13px;padding:12px;resize:vertical;outline:none}
-.whitelist-editor button{margin-top:10px;padding:10px 24px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px}
+      /* 模态框 */
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9998;
+      }
+      .modal-box {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px;
+        width: 460px;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+      }
+      .modal-box h3 {
+        font-size: 16px;
+        margin-bottom: 16px;
+        color: var(--text);
+      }
+      .modal-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-top: 16px;
+      }
 
-/* 全局广播 */
-.broadcast textarea{width:100%;height:120px;background:#0f1117;border:1px solid var(--border);border-radius:8px;color:#fff;font-size:14px;padding:12px;resize:vertical;outline:none}
-.broadcast button{margin-top:10px;padding:10px 24px;background:var(--red);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600}
-.broadcast .hint{font-size:12px;color:var(--muted);margin-top:6px}
+      /* Toast */
+      .toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: var(--card);
+        border: 1px solid var(--green);
+        color: var(--green);
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 12px;
+        z-index: 10000;
+        opacity: 0;
+        transition: opacity 0.3s;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+      .toast.show {
+        opacity: 1;
+      }
+      .toast.error {
+        border-color: var(--red);
+        color: var(--red);
+      }
 
-/* 无数据 */
-.empty{text-align:center;padding:60px;color:var(--muted);font-size:14px}
+      /* 违规日志 */
+      .log-entry {
+        padding: 8px 12px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        margin-bottom: 4px;
+        font-size: 12px;
+        box-shadow: var(--shadow);
+      }
+      .log-entry .ltop {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 2px;
+      }
+      .log-entry .lstudent {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .log-entry .lproc {
+        color: var(--red);
+      }
+      .log-entry .ltime {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .log-entry .lroom {
+        color: var(--muted);
+        font-size: 11px;
+      }
 
-/* Toast */
-.toast{position:fixed;bottom:20px;right:20px;background:var(--card);border:1px solid var(--green);color:var(--green);padding:10px 20px;border-radius:8px;font-size:13px;z-index:10000;opacity:0;transition:opacity .3s}
-.toast.show{opacity:1}
-</style>
-</head>
-<body>
+      /* 学生管理 */
+      .student-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .student-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 13px;
+        box-shadow: var(--shadow);
+      }
+      .student-row .sname {
+        font-weight: 600;
+        flex: 1;
+      }
+      .student-row .scode {
+        font-family: monospace;
+        font-size: 12px;
+        color: var(--accent);
+        letter-spacing: 1px;
+      }
+      .student-row .sstatus {
+        font-size: 11px;
+      }
+      .student-row .del-btn {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--red);
+        padding: 3px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+      }
+      .student-row .del-btn:hover {
+        background: var(--red);
+        color: #fff;
+      }
 
-<!-- 登录界面 -->
-<div id="loginScreen">
-  <div class="login-box">
-    <h1>🛡️ Guardian 管控中心</h1>
-    <p>教师端 · 守护每一台子机</p>
-    <input type="text" id="username" placeholder="用户名" value="admin">
-    <input type="password" id="password" placeholder="密码" value="guardian2026">
-    <button onclick="doLogin()">进入管控中心</button>
-    <div class="error" id="loginError">用户名或密码错误</div>
-  </div>
-</div>
+      /* 广播 */
+      .broadcast-box textarea {
+        width: 100%;
+        min-height: 100px;
+        margin-bottom: 8px;
+      }
+      .broadcast-box .hint {
+        font-size: 11px;
+        color: var(--muted);
+      }
 
-<!-- 主界面 -->
-<div id="mainApp">
-  <div class="header">
-    <h2>🛡️ Guardian 管控中心</h2>
-    <span class="online-count" id="onlineCount">在线 0 台</span>
-    <button onclick="logout()">退出登录</button>
-  </div>
+      /* 白名单 */
+      .wl-editor textarea {
+        width: 100%;
+        min-height: 200px;
+        font-family: monospace;
+        font-size: 12px;
+      }
+      .wl-editor .hint {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
 
-  <div class="main-layout">
-    <!-- 侧边栏 -->
-    <div class="sidebar">
-      <button class="nav-btn active" onclick="showTab('dashboard')" id="nav-dashboard">📊 班级看板</button>
-      <button class="nav-btn" onclick="showTab('students')" id="nav-students">👥 学生管理</button>
-      <button class="nav-btn" onclick="showTab('whitelist')" id="nav-whitelist">⚙️ 白名单配置</button>
-      <button class="nav-btn" onclick="showTab('broadcast')" id="nav-broadcast">📢 全局广播</button>
-      <div style="flex:1"></div>
-      <button class="nav-btn" onclick="showTab('logs')" id="nav-logs">📋 违规日志</button>
+      /* 守卫控制 */
+      .guard-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-bottom: 6px;
+        box-shadow: var(--shadow);
+      }
+      .guard-row .gname {
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .guard-row .ginfo {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .guard-toggle {
+        display: flex;
+        gap: 4px;
+      }
+
+      /* 滚轮 */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 登录界面 -->
+    <div id="loginScreen">
+      <div class="login-box">
+        <h1>🛡️ Guardian 管控中心</h1>
+        <div class="sub">远程课堂守卫管理平台</div>
+        <div class="login-tabs">
+          <button
+            class="active"
+            onclick="switchLoginTab('admin')"
+            id="ltab-admin"
+          >
+            管理员
+          </button>
+          <button onclick="switchLoginTab('teacher')" id="ltab-teacher">
+            教师
+          </button>
+        </div>
+        <form id="loginForm" onsubmit="doLogin();return false">
+        <div id="loginAdmin">
+          <input
+            type="text"
+            id="admUsername"
+            placeholder="管理员用户名"
+            value="admin"
+          />
+          <input
+            type="password"
+            id="admPassword"
+            placeholder="密码"
+            value="guardian2026"
+          />
+        </div>
+        <div id="loginTeacher" style="display: none">
+          <input type="text" id="tchStaffId" placeholder="工号" />
+          <input type="password" id="tchPassword" placeholder="密码" />
+        </div>
+        <button type="submit" class="btn-login">进入管控中心</button>
+        </form>
+        <div class="error" id="loginError"></div>
+      </div>
     </div>
 
-    <!-- 内容 -->
-    <div class="content" id="content">
-
-      <!-- 班级看板 -->
-      <div id="tab-dashboard">
-        <div class="stats" id="stats"></div>
-        <div class="section-title">子机状态 <span id="clientTime"></span></div>
-        <div class="card-grid" id="clientGrid">
-          <div class="empty">暂无子机接入，请确保子机已连接到管控服务器</div>
-        </div>
+    <!-- 主界面 -->
+    <div id="mainApp">
+      <div class="header">
+        <h2>🛡️ Guardian</h2>
+        <span class="role-badge admin" id="roleBadge">管理员</span>
+        <span id="headerUser" style="font-size: 13px; color: var(--muted)"
+          >admin</span
+        >
+        <select
+          id="roomSelector"
+          onchange="onRoomChange()"
+          style="display: none"
+        >
+          <option value="">-- 选择房间 --</option>
+        </select>
+        <div class="spacer"></div>
+        <span class="online-badge" id="headerOnline">在线 0</span>
+        <button class="logout-btn" onclick="logout()">退出</button>
       </div>
 
-      <!-- 学生管理 -->
-      <div id="tab-students" style="display:none">
-        <div class="section-title">添加学生</div>
-        <div class="add-student">
-          <div style="display:flex;gap:8px;margin-bottom:8px">
-            <input id="sName" placeholder="学生姓名 *">
-            <input id="sClass" placeholder="班级，如 计科241">
-            <input id="sSeat" placeholder="座位号，如 A1">
-          </div>
-          <button onclick="addStudent()">+ 添加学生</button>
-        </div>
-        <div class="section-title">学生列表（已注册 <span id="studentCount">0</span> 人）</div>
-        <div class="student-list" id="studentList"></div>
+      <div class="main-layout">
+        <div class="sidebar" id="sidebar"></div>
+        <div class="content" id="contentArea"></div>
       </div>
-
-      <!-- 白名单配置 -->
-      <div id="tab-whitelist" style="display:none">
-        <div class="section-title">全局白名单配置 <span>— 保存后一键下发到所有子机</span></div>
-        <div class="whitelist-editor">
-          <textarea id="wlEditor" placeholder='// 允许的进程（完整文件名）
-chrome.exe
-firefox.exe
-msedge.exe
-qq.exe
-wechat.exe
-
-// 允许的浏览器
-chrome.exe
-firefox.exe
-msedge.exe
-
-// 允许访问的域名
-baidu.com
-csdn.net
-github.com'></textarea>
-          <button onclick="saveWhitelist()">💾 保存并下发到所有子机</button>
-        </div>
-      </div>
-
-      <!-- 全局广播 -->
-      <div id="tab-broadcast" style="display:none">
-        <div class="section-title">全局广播消息</div>
-        <div class="broadcast">
-          <textarea id="broadcastMsg" placeholder="输入要广播给所有子机的消息，例如：
-同学们请注意，现在开始进行课堂小测，请切换到答题界面。
-"></textarea>
-          <button onclick="doBroadcast()">📢 发送给所有子机</button>
-          <div class="hint">⚠️ 广播消息会显示在所有子机的 Guardian 弹窗中</div>
-        </div>
-      </div>
-
-      <!-- 违规日志 -->
-      <div id="tab-logs" style="display:none">
-        <div class="section-title">全校违规记录</div>
-        <div id="logList" style="display:flex;flex-direction:column;gap:8px"></div>
-      </div>
-
     </div>
-  </div>
-</div>
 
-<div class="toast" id="toast"></div>
+    <div class="toast" id="toast"></div>
 
-<script>
-const API = 'http://localhost:3847';
-let token = localStorage.getItem('guardian_token') || '';
-let username = localStorage.getItem('guardian_user') || '';
-let clients = [];
-let students = [];
-let pollTimer = null;
+    <script>
+      // ══════════════════════════════════════
+      //  状态
+      // ══════════════════════════════════════
+      const API = window.location.origin;
+      let token = localStorage.getItem("guardian_token") || "";
+      let role = localStorage.getItem("guardian_role") || "";
+      let userInfo = null; // { username, name, teacherId, rooms }
 
-async function api(path, opts = {}) {
-  const res = await fetch(API + path, {
-    ...opts,
-    headers: { 'x-token': token, 'Content-Type': 'application/json', ...(opts.headers || {}) }
-  });
-  return res.json();
-}
+      let pollTimer = null;
+      let selectedRoomId = null;
 
-async function doLogin() {
-  const u = document.getElementById('username').value;
-  const p = document.getElementById('password').value;
-  const r = await fetch(API + '/api/admin/login', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: u, password: p })
-  });
-  const d = await r.json();
-  if (!d.ok) { document.getElementById('loginError').style.display = 'block'; return; }
-  token = d.token; username = d.username;
-  localStorage.setItem('guardian_token', token);
-  localStorage.setItem('guardian_user', username);
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('mainApp').style.display = 'block';
-  startPolling();
-}
+      // ══════════════════════════════════════
+      //  API 工具
+      // ══════════════════════════════════════
+      async function api(method, path, body) {
+        try {
+          const opts = {
+            method,
+            headers: { "x-token": token, "Content-Type": "application/json" },
+          };
+          if (body) opts.body = JSON.stringify(body);
+          const res = await fetch(API + path, opts);
+          const data = await res.json();
+          return { status: res.status, ...data };
+        } catch (e) {
+          return { ok: false, msg: e.message };
+        }
+      }
 
-function logout() {
-  token = ''; username = '';
-  localStorage.removeItem('guardian_token');
-  localStorage.removeItem('guardian_user');
-  clearInterval(pollTimer);
-  location.reload();
-}
+      function get(path) {
+        return api("GET", path);
+      }
+      function post(path, body) {
+        return api("POST", path, body);
+      }
+      function del(path) {
+        return api("DELETE", path);
+      }
+      function put(path, body) {
+        return api("PUT", path, body);
+      }
 
-function showTab(name) {
-  ['dashboard','students','whitelist','broadcast','logs'].forEach(t => {
-    document.getElementById('tab-' + t).style.display = 'none';
-    document.getElementById('nav-' + t).classList.remove('active');
-  });
-  document.getElementById('tab-' + name).style.display = 'block';
-  document.getElementById('nav-' + name).classList.add('active');
-  if (name === 'students') loadStudents();
-}
+      // ══════════════════════════════════════
+      //  登录
+      // ══════════════════════════════════════
+      let loginMode = "admin";
 
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3000);
-}
+      function switchLoginTab(mode) {
+        loginMode = mode;
+        document.getElementById("ltab-admin").className =
+          mode === "admin" ? "active" : "";
+        document.getElementById("ltab-teacher").className =
+          mode === "teacher" ? "active" : "";
+        document.getElementById("loginAdmin").style.display =
+          mode === "admin" ? "block" : "none";
+        document.getElementById("loginTeacher").style.display =
+          mode === "teacher" ? "block" : "none";
+      }
 
-async function startPolling() {
-  await loadClients();
-  await loadStudents();
-  pollTimer = setInterval(async () => { await loadClients(); }, 3000);
-}
+      async function doLogin() {
+        const errEl = document.getElementById("loginError");
+        errEl.style.display = "none";
+        let r;
+        if (loginMode === "admin") {
+          const u = document.getElementById("admUsername").value.trim();
+          const p = document.getElementById("admPassword").value.trim();
+          if (!u || !p) {
+            errEl.textContent = "请输入用户名和密码";
+            errEl.style.display = "block";
+            return;
+          }
+          r = await post("/api/admin/login", { username: u, password: p });
+          if (r.ok) {
+            role = "admin";
+            userInfo = { username: u };
+          }
+        } else {
+          const s = document.getElementById("tchStaffId").value.trim();
+          const p = document.getElementById("tchPassword").value.trim();
+          if (!s || !p) {
+            errEl.textContent = "请输入工号和密码";
+            errEl.style.display = "block";
+            return;
+          }
+          r = await post("/api/teacher/login", { staffId: s, password: p });
+          if (r.ok) {
+            role = "teacher";
+            userInfo = { staffId: s, teacherId: r.teacherId, name: r.name };
+          }
+        }
+        if (!r.ok) {
+          errEl.textContent = r.msg || "登录失败";
+          errEl.style.display = "block";
+          return;
+        }
+        token = r.token;
+        if (loginMode === "admin")
+          userInfo = {
+            username:
+              r.username || document.getElementById("admUsername").value.trim(),
+          };
+        else
+          userInfo = {
+            staffId:
+              r.staffId || document.getElementById("tchStaffId").value.trim(),
+            name: r.name,
+            teacherId: r.teacherId,
+          };
+        localStorage.setItem("guardian_token", token);
+        localStorage.setItem("guardian_role", role);
+        localStorage.setItem("guardian_user", JSON.stringify(userInfo));
+        enterMain();
+      }
 
-async function loadClients() {
-  const d = await api('/api/clients');
-  if (!d.ok) return;
-  clients = d.clients;
-  renderStats();
-  renderClients();
-}
+      function logout() {
+        token = "";
+        role = "";
+        userInfo = null;
+        selectedRoomId = null;
+        localStorage.removeItem("guardian_token");
+        localStorage.removeItem("guardian_role");
+        localStorage.removeItem("guardian_user");
+        clearInterval(pollTimer);
+        document.getElementById("mainApp").style.display = "none";
+        document.getElementById("loginScreen").style.display = "flex";
+      }
 
-async function loadStudents() {
-  const d = await api('/api/students');
-  if (!d.ok) return;
-  students = d.students;
-  document.getElementById('studentCount').textContent = students.length;
-  renderStudents();
-}
+      // ══════════════════════════════════════
+      //  主界面
+      // ══════════════════════════════════════
+      let currentTab = "dashboard";
 
-function renderStats() {
-  const online = clients.filter(c => c.online).length;
-  const guarding = clients.filter(c => c.guardActive && c.online).length;
-  const violations = clients.reduce((a, c) => a + (c.violations ? c.violations.length : 0), 0);
-  const offline = students.length - online;
-  document.getElementById('onlineCount').textContent = `在线 ${online} / ${students.length} 台`;
-  document.getElementById('stats').innerHTML = `
-    <div class="stat-card green"><div class="num">${online}</div><div class="label">在线子机</div></div>
-    <div class="stat-card"><div class="num" style="color:var(--accent)">${guarding}</div><div class="label">守卫运行中</div></div>
-    <div class="stat-card red"><div class="num">${violations}</div><div class="label">总违规记录</div></div>
-    <div class="stat-card"><div class="num" style="color:var(--muted)">${Math.max(0, offline)}</div><div class="label">离线</div></div>
+      function enterMain() {
+        document.getElementById("loginScreen").style.display = "none";
+        document.getElementById("mainApp").style.display = "block";
+
+        const badge = document.getElementById("roleBadge");
+        badge.textContent = role === "admin" ? "管理员" : "教师";
+        badge.className = "role-badge " + role;
+        document.getElementById("headerUser").textContent =
+          role === "admin"
+            ? userInfo.username
+            : userInfo.name + " (" + userInfo.staffId + ")";
+
+        buildSidebar();
+        switchTab("dashboard");
+        startPolling();
+      }
+
+      function buildSidebar() {
+        const sidebar = document.getElementById("sidebar");
+        const items = [];
+        items.push({ id: "dashboard", icon: "📊", label: "总览" });
+        if (role === "admin") {
+          items.push({ id: "teachers", icon: "👨‍🏫", label: "教师管理" });
+        }
+        items.push({
+          id: "rooms",
+          icon: "🏫",
+          label: role === "admin" ? "所有房间" : "我的房间",
+        });
+        if (role === "teacher") {
+          items.push({ id: "students", icon: "👥", label: "学生管理" });
+          items.push({ id: "clients", icon: "🖥️", label: "子机监控" });
+          items.push({ id: "guard", icon: "🛡️", label: "守卫控制" });
+          items.push({ id: "broadcast", icon: "📢", label: "广播" });
+          items.push({ id: "whitelist", icon: "⚙️", label: "白名单" });
+        }
+        items.push({ id: "violations", icon: "📋", label: "违规日志" });
+
+        sidebar.innerHTML = items
+          .map(
+            (item) =>
+              `<button class="nav-btn" onclick="switchTab('${item.id}')" id="nav-${item.id}">${item.icon} ${item.label}</button>`
+          )
+          .join("");
+      }
+
+      function switchTab(tabId) {
+        currentTab = tabId;
+        document
+          .querySelectorAll(".nav-btn")
+          .forEach((b) => b.classList.remove("active"));
+        const nav = document.getElementById("nav-" + tabId);
+        if (nav) nav.classList.add("active");
+        renderTab(tabId);
+      }
+
+      function renderTab(tabId) {
+        const area = document.getElementById("contentArea");
+        if (tabId === "dashboard") renderDashboard(area);
+        else if (tabId === "teachers") renderTeachers(area);
+        else if (tabId === "rooms") renderRooms(area);
+        else if (tabId === "students") renderStudents(area);
+        else if (tabId === "clients") renderClients(area);
+        else if (tabId === "guard") renderGuard(area);
+        else if (tabId === "broadcast") renderBroadcast(area);
+        else if (tabId === "whitelist") renderWhitelist(area);
+        else if (tabId === "violations") renderViolations(area);
+      }
+
+      // ══════════════════════════════════════
+      //  轮询
+      // ══════════════════════════════════════
+      let cachedRooms = [];
+      let cachedClients = {};
+
+      async function refreshData() {
+        if (role === "admin") {
+          const r = await get("/api/admin/rooms");
+          console.log("[refresh] admin rooms:", r.status, r.ok, "count:", r.rooms?.length);
+          if (r.ok) cachedRooms = r.rooms || [];
+          else console.warn("[refresh] admin rooms failed:", r.msg);
+          if (selectedRoomId) {
+            const rr = await get("/api/admin/rooms/" + selectedRoomId);
+            console.log("[refresh] admin room detail:", rr.status, rr.ok);
+            if (rr.ok && rr.room) cachedClients[selectedRoomId] = rr.room.clients || [];
+          }
+        } else {
+          const r = await get("/api/rooms");
+          console.log("[refresh] teacher rooms:", r.status, r.ok, "count:", r.rooms?.length);
+          if (r.ok) cachedRooms = r.rooms || [];
+          if (selectedRoomId) {
+            const rr = await get("/api/rooms/" + selectedRoomId + "/clients");
+            if (rr.ok) cachedClients[selectedRoomId] = rr.clients || [];
+          }
+        }
+      }
+
+      function startPolling() {
+        refreshData().then(() => {
+          updateUI();
+          pollTimer = setInterval(async () => {
+            await refreshData();
+            updateUI();
+          }, 3000);
+        });
+      }
+
+      function updateUI() {
+        updateHeader();
+        if (currentTab === "dashboard")
+          renderDashboard(document.getElementById("contentArea"));
+        else if (currentTab === "clients")
+          renderClients(document.getElementById("contentArea"));
+        else if (currentTab === "guard")
+          renderGuard(document.getElementById("contentArea"));
+        else if (currentTab === "violations")
+          renderViolations(document.getElementById("contentArea"));
+      }
+
+      function updateHeader() {
+        let online = 0;
+        if (role === "admin") {
+          cachedRooms.forEach((r) => (online += r.onlineCount || 0));
+        } else {
+          cachedRooms.forEach((r) => (online += r.onlineCount || 0));
+        }
+        document.getElementById("headerOnline").textContent = "在线 " + online;
+        // 更新房间选择器
+        const sel = document.getElementById("roomSelector");
+        if (role === "teacher" && cachedRooms.length > 0) {
+          sel.style.display = "inline-block";
+          const currentVal = sel.value;
+          sel.innerHTML =
+            '<option value="">-- 选择房间 --</option>' +
+            cachedRooms
+              .map(
+                (r) =>
+                  `<option value="${r.id}">${r.roomName} (${
+                    r.onlineCount || 0
+                  }在线)</option>`
+              )
+              .join("");
+          if (currentVal && cachedRooms.some((r) => r.id === currentVal))
+            sel.value = currentVal;
+          else if (cachedRooms.length > 0 && !selectedRoomId) {
+            sel.value = cachedRooms[0].id;
+            selectedRoomId = cachedRooms[0].id;
+          }
+        } else if (role === "teacher") {
+          sel.style.display = "none";
+        }
+      }
+
+      function onRoomChange() {
+        selectedRoomId = document.getElementById("roomSelector").value || null;
+        if (
+          currentTab === "students" ||
+          currentTab === "clients" ||
+          currentTab === "guard" ||
+          currentTab === "whitelist"
+        ) {
+          renderTab(currentTab);
+        }
+      }
+
+      function getSelectedRoom() {
+        return cachedRooms.find((r) => r.id === selectedRoomId) || null;
+      }
+
+      // ══════════════════════════════════════
+      //  页面渲染
+      // ══════════════════════════════════════
+
+      // ── 总览 ──
+      function renderDashboard(area) {
+        let totalRooms = cachedRooms.length;
+        let totalStudents = 0,
+          totalOnline = 0,
+          totalViolations = 0,
+          totalGuarding = 0;
+        cachedRooms.forEach((r) => {
+          totalStudents += r.studentCount || 0;
+          totalOnline += r.onlineCount || 0;
+        });
+        if (selectedRoomId) {
+          const clients = cachedClients[selectedRoomId] || [];
+          totalGuarding = clients.filter(
+            (c) => c.guardActive && c.online
+          ).length;
+          clients.forEach(
+            (c) => (totalViolations += (c.violations || []).length)
+          );
+        } else {
+          // We need to fetch client detail for each room to get violations count
+          // For performance, just show what we can
+        }
+
+        area.innerHTML = `
+    <div class="stats">
+      <div class="stat-card accent"><div class="num">${totalRooms}</div><div class="label">教室总数</div></div>
+      <div class="stat-card green"><div class="num">${totalOnline}</div><div class="label">在线子机</div></div>
+      <div class="stat-card"><div class="num" style="color:var(--muted)">${Math.max(
+        0,
+        totalStudents - totalOnline
+      )}</div><div class="label">离线</div></div>
+      <div class="stat-card yellow"><div class="num">${totalViolations}</div><div class="label">违规记录</div></div>
+    </div>
+    <div class="section-title">教室概览 <span class="hint">点击查看详情</span></div>
+    <div class="room-grid">
+      ${
+        cachedRooms.length === 0
+          ? '<div class="empty">暂无教室</div>'
+          : cachedRooms
+              .map((r) => {
+                const isSelected = r.id === selectedRoomId;
+                return `<div class="room-card ${
+                  isSelected ? "selected" : ""
+                }" onclick="selectRoom('${r.id}')">
+            <div class="top">
+              <div class="name">${r.roomName}</div>
+              <div class="join-code">${r.joinCode}</div>
+            </div>
+            <div class="meta">
+              <span>👨‍🎓 ${r.studentCount || 0} 学生</span>
+              <span>🖥️ ${r.onlineCount || 0} 在线</span>
+              <span>👤 ${r.teacherName || ""}</span>
+            </div>
+          </div>`;
+              })
+              .join("")
+      }
+    </div>
   `;
-  document.getElementById('clientTime').textContent = new Date().toLocaleTimeString();
-}
+      }
 
-function renderClients() {
-  const grid = document.getElementById('clientGrid');
-  if (clients.length === 0) {
-    grid.innerHTML = '<div class="empty">暂无子机接入。请在子机上运行 Guardian，选择"子机模式"并连接本服务器。</div>';
-    return;
-  }
-  grid.innerHTML = clients.map(c => {
-    const vCount = c.violations ? c.violations.length : 0;
-    const vText = vCount > 0 ? `<div class="violations">⚠️ ${vCount} 条违规记录</div>` : '';
-    return `
-    <div class="client-card">
-      <div class="top">
+      function selectRoom(roomId) {
+        selectedRoomId = roomId;
+        if (role === "teacher") {
+          document.getElementById("roomSelector").value = roomId;
+        }
+        refreshData().then(() => updateUI());
+      }
+
+      // ── 教师管理 (Admin Only) ──
+      async function renderTeachers(area) {
+        const r = await get("/api/admin/teachers");
+        const teachers = r.ok ? r.teachers : [];
+        area.innerHTML = `
+    <div class="section-title">教师管理 <span class="hint">共 ${
+      teachers.length
+    } 人</span></div>
+    <button class="btn btn-primary btn-sm" onclick="showAddTeacher()" style="margin-bottom:12px">+ 添加教师</button>
+    <table>
+      <thead><tr><th>工号</th><th>姓名</th><th>创建时间</th><th>操作</th></tr></thead>
+      <tbody>
+        ${
+          teachers.length === 0
+            ? '<tr><td colspan="4" style="text-align:center;color:var(--muted)">暂无教师</td></tr>'
+            : teachers
+                .map(
+                  (t) => `<tr>
+            <td>${t.staffId}</td>
+            <td>${t.name}</td>
+            <td>${new Date(t.createdAt).toLocaleString()}</td>
+            <td>
+              <button class="btn btn-sm btn-outline" onclick="editTeacher('${
+                t.id
+              }','${t.staffId}','${t.name}')">编辑</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteTeacher('${
+                t.id
+              }')">删除</button>
+            </td>
+          </tr>`
+                )
+                .join("")
+        }
+      </tbody>
+    </table>
+  `;
+      }
+
+      function showAddTeacher() {
+        showModal(
+          "添加教师",
+          `
+    <div class="form-group"><label>工号</label><input id="modalStaffId" placeholder="如 T001"></div>
+    <div class="form-group"><label>姓名</label><input id="modalTchName" placeholder="教师姓名"></div>
+    <div class="form-group"><label>密码</label><input type="password" id="modalTchPwd" placeholder="初始密码"></div>
+  `,
+          async () => {
+            const staffId = document
+              .getElementById("modalStaffId")
+              .value.trim();
+            const name = document.getElementById("modalTchName").value.trim();
+            const password = document
+              .getElementById("modalTchPwd")
+              .value.trim();
+            if (!staffId || !name || !password) {
+              toast("请填写完整信息", true);
+              return;
+            }
+            const r = await post("/api/admin/teachers", {
+              staffId,
+              name,
+              password,
+            });
+            if (r.ok) {
+              toast("教师已添加");
+              closeModal();
+              switchTab("teachers");
+            } else toast(r.msg || "添加失败", true);
+          }
+        );
+      }
+
+      function editTeacher(id, staffId, name) {
+        showModal(
+          "编辑教师",
+          `
+    <div class="form-group"><label>工号</label><input id="modalStaffId" value="${staffId}"></div>
+    <div class="form-group"><label>姓名</label><input id="modalTchName" value="${name}"></div>
+    <div class="form-group"><label>新密码（留空不修改）</label><input type="password" id="modalTchPwd" placeholder="留空不修改"></div>
+  `,
+          async () => {
+            const body = {};
+            const newStaffId = document
+              .getElementById("modalStaffId")
+              .value.trim();
+            const newName = document
+              .getElementById("modalTchName")
+              .value.trim();
+            const newPwd = document.getElementById("modalTchPwd").value;
+            if (newStaffId && newStaffId !== staffId) body.staffId = newStaffId;
+            if (newName && newName !== name) body.name = newName;
+            if (newPwd) body.password = newPwd;
+            if (Object.keys(body).length === 0) {
+              toast("没有修改", true);
+              return;
+            }
+            const r = await put("/api/admin/teachers/" + id, body);
+            if (r.ok) {
+              toast("已更新");
+              closeModal();
+              switchTab("teachers");
+            } else toast(r.msg || "更新失败", true);
+          }
+        );
+      }
+
+      async function deleteTeacher(id) {
+        if (!confirm("确定删除该教师？名下不能有房间。")) return;
+        const r = await del("/api/admin/teachers/" + id);
+        if (r.ok) {
+          toast("已删除");
+          switchTab("teachers");
+        } else toast(r.msg || "删除失败", true);
+      }
+
+      // ── 房间管理 ──
+      async function renderRooms(area) {
+        if (role === "admin") {
+          area.innerHTML = `
+      <div class="section-title">所有教室 <span class="hint">共 ${
+        cachedRooms.length
+      } 间</span></div>
+      <div class="room-grid">
+        ${
+          cachedRooms.length === 0
+            ? '<div class="empty">暂无教室</div>'
+            : cachedRooms
+                .map(
+                  (r) => `<div class="room-card" onclick="selectRoom('${
+                    r.id
+                  }')">
+            <div class="top"><div class="name">${
+              r.roomName
+            }</div><div class="join-code">${r.joinCode}</div></div>
+            <div class="meta">
+              <span>👤 ${r.teacherName || "未知"}</span>
+              <span>👨‍🎓 ${r.studentCount || 0}</span>
+              <span>🖥️ ${r.onlineCount || 0} 在线</span>
+            </div>
+          </div>`
+                )
+                .join("")
+        }
+      </div>
+    `;
+        } else {
+          area.innerHTML = `
+      <div class="section-title">我的教室 <span class="hint">共 ${
+        cachedRooms.length
+      } 间</span></div>
+      <button class="btn btn-primary btn-sm" onclick="showCreateRoom()" style="margin-bottom:12px">+ 创建教室</button>
+      <div class="room-grid">
+        ${
+          cachedRooms.length === 0
+            ? '<div class="empty">暂无教室，点击上方按钮创建</div>'
+            : cachedRooms
+                .map(
+                  (r) => `
+            <div class="room-card ${
+              r.id === selectedRoomId ? "selected" : ""
+            }" onclick="selectRoom('${r.id}')">
+              <div class="top">
+                <div class="name">${r.roomName}</div>
+                <div class="join-code">${r.joinCode}</div>
+              </div>
+              <div class="meta">
+                <span>👨‍🎓 ${r.studentCount || 0} 学生</span>
+                <span>🖥️ ${r.onlineCount || 0} 在线</span>
+              </div>
+              <div style="margin-top:8px;display:flex;gap:4px">
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();editRoom('${
+                  r.id
+                }','${r.roomName}')">编辑</button>
+                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteRoom('${
+                  r.id
+                }')">删除</button>
+              </div>
+            </div>`
+                )
+                .join("")
+        }
+      </div>
+    `;
+        }
+      }
+
+      function showCreateRoom() {
+        showModal(
+          "创建教室",
+          `
+    <div class="form-group"><label>房间名称</label><input id="modalRoomName" placeholder="如 计科241机房"></div>
+    <div class="form-group"><label>守卫间隔 (ms)</label><input id="modalInterval" type="number" value="3000" placeholder="3000"></div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-bottom:8px">
+      <input type="checkbox" id="modalAutoStart" checked> 自动启动守卫
+    </label>
+  `,
+          async () => {
+            const name = document.getElementById("modalRoomName").value.trim();
+            if (!name) {
+              toast("请输入房间名称", true);
+              return;
+            }
+            const r = await post("/api/rooms", {
+              roomName: name,
+              guard: {
+                checkInterval:
+                  parseInt(document.getElementById("modalInterval").value) ||
+                  3000,
+                autoStartGuard:
+                  document.getElementById("modalAutoStart").checked,
+              },
+            });
+            if (r.ok) {
+              toast("教室已创建，接入码: " + r.room.joinCode);
+              closeModal();
+              selectedRoomId = r.room.id;
+              refreshData().then(() => switchTab("rooms"));
+            } else toast(r.msg || "创建失败", true);
+          }
+        );
+      }
+
+      function editRoom(id, currentName) {
+        showModal(
+          "编辑教室",
+          `
+    <div class="form-group"><label>房间名称</label><input id="modalRoomName" value="${currentName}"></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">如需修改守卫/白名单配置，请在对应页面操作。</div>
+  `,
+          async () => {
+            const name = document.getElementById("modalRoomName").value.trim();
+            if (!name) {
+              toast("请输入房间名称", true);
+              return;
+            }
+            const r = await put("/api/rooms/" + id, { roomName: name });
+            if (r.ok) {
+              toast("已更新");
+              closeModal();
+              switchTab("rooms");
+            } else toast(r.msg || "更新失败", true);
+          }
+        );
+      }
+
+      async function deleteRoom(id) {
+        if (!confirm("确定删除该教室？")) return;
+        const r = await del("/api/rooms/" + id);
+        if (r.ok) {
+          toast("已删除");
+          if (selectedRoomId === id) selectedRoomId = null;
+          refreshData().then(() => switchTab("rooms"));
+        } else toast(r.msg || "删除失败", true);
+      }
+
+      // ── 学生管理 ──
+      async function renderStudents(area) {
+        if (!selectedRoomId) {
+          area.innerHTML =
+            '<div class="empty">请先在总览或房间页面选择一个教室</div>';
+          return;
+        }
+        const room = getSelectedRoom();
+        const r = await get("/api/rooms/" + selectedRoomId + "/students");
+        const students = r.ok ? r.students : [];
+
+        area.innerHTML = `
+    <div class="section-title">${
+      room ? room.roomName : "教室"
+    } — 学生管理 <span class="hint">接入码: ${
+          room ? room.joinCode : ""
+        }</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input id="sSid" placeholder="学号 *" style="flex:1">
+      <input id="sName" placeholder="姓名 *" style="flex:1">
+      <button class="btn btn-primary btn-sm" onclick="addStudent()">+ 添加</button>
+    </div>
+    <div class="student-grid">
+      ${
+        students.length === 0
+          ? '<div class="empty">暂无学生，请添加</div>'
+          : students
+              .map((s) => {
+                const clients = cachedClients[selectedRoomId] || [];
+                const client = clients.find((c) => c.studentId === s.studentId);
+                const status = client && client.online ? "🟢 在线" : "🔴 离线";
+                return `<div class="student-row">
+            <div class="sname">${s.name}</div>
+            <div class="scode">${s.studentId}</div>
+            <div class="sstatus">${status}</div>
+            <button class="del-btn" onclick="deleteStudent('${s.studentId}')">删除</button>
+          </div>`;
+              })
+              .join("")
+      }
+    </div>
+  `;
+      }
+
+      async function addStudent() {
+        const sid = document.getElementById("sSid").value.trim();
+        const name = document.getElementById("sName").value.trim();
+        if (!sid || !name) {
+          toast("请填写学号和姓名", true);
+          return;
+        }
+        const r = await post("/api/rooms/" + selectedRoomId + "/students", {
+          studentId: sid,
+          name,
+        });
+        if (r.ok) {
+          toast("已添加 " + name);
+          document.getElementById("sSid").value = "";
+          document.getElementById("sName").value = "";
+          renderStudents(document.getElementById("contentArea"));
+        } else toast(r.msg || "添加失败", true);
+      }
+
+      async function deleteStudent(studentId) {
+        if (!confirm("确定删除该学生？")) return;
+        const r = await del(
+          "/api/rooms/" + selectedRoomId + "/students/" + studentId
+        );
+        if (r.ok) {
+          toast("已删除");
+          renderStudents(document.getElementById("contentArea"));
+        } else toast(r.msg || "删除失败", true);
+      }
+
+      // ── 子机监控 ──
+      async function renderClients(area) {
+        if (!selectedRoomId) {
+          area.innerHTML = '<div class="empty">请先选择一个教室</div>';
+          return;
+        }
+        const room = getSelectedRoom();
+        const r = await get("/api/rooms/" + selectedRoomId + "/clients");
+        const clients = r.ok ? r.clients : [];
+        cachedClients[selectedRoomId] = clients;
+
+        if (!r.ok) {
+          area.innerHTML = '<div class="empty">获取客户端列表失败</div>';
+          return;
+        }
+
+        area.innerHTML = `
+    <div class="section-title">${
+      room ? room.roomName : ""
+    } — 子机状态 <span class="hint">${new Date().toLocaleTimeString()}</span></div>
+    <div class="stats" style="grid-template-cols:repeat(3,1fr)">
+      <div class="stat-card green"><div class="num">${
+        clients.filter((c) => c.online).length
+      }</div><div class="label">在线</div></div>
+      <div class="stat-card accent"><div class="num">${
+        clients.filter((c) => c.guardActive && c.online).length
+      }</div><div class="label">守卫中</div></div>
+      <div class="stat-card red"><div class="num">${clients.reduce(
+        (a, c) => a + (c.violations || []).length,
+        0
+      )}</div><div class="label">违规</div></div>
+    </div>
+    <div class="client-grid">
+      ${
+        clients.length === 0
+          ? '<div class="empty">暂无子机连接</div>'
+          : clients
+              .map((c) => {
+                const vCount = (c.violations || []).length;
+                const lastSeen = c.lastSeen
+                  ? new Date(c.lastSeen).toLocaleTimeString()
+                  : "-";
+                return `<div class="client-card">
+            <div class="top">
+              <div>
+                <div class="cname">${c.studentName || "未绑定"}</div>
+                <div class="cinfo">${c.ip || ""} · ${c.hostname || ""} · ${
+                  c.clientId ? c.clientId.slice(0, 8) : ""
+                }</div>
+              </div>
+              <div>
+                <span class="badge ${c.online ? "online" : "offline"}">${
+                  c.online ? "在线" : "离线"
+                }</span>
+                <span class="badge ${c.guardActive ? "guarding" : "idle"}">${
+                  c.guardActive ? "守卫" : "暂停"
+                }</span>
+                ${
+                  vCount > 0
+                    ? `<span class="badge violation">违规${vCount}</span>`
+                    : ""
+                }
+              </div>
+            </div>
+            <div class="cbadges">
+              <span style="font-size:10px;color:var(--muted)">进程: ${
+                c.processCount || 0
+              } · 最后活跃: ${lastSeen}</span>
+            </div>
+            ${
+              vCount > 0
+                ? `<div class="violations">${c.violations
+                    .slice(0, 3)
+                    .map((v) => "⚠️ " + v.process)
+                    .join("<br>")}</div>`
+                : ""
+            }
+            <div class="actions">
+              <button class="${
+                c.guardActive ? "btn-off" : "btn-on"
+              }" onclick="toggleClientGuard('${
+                  c.clientId
+                }', ${!c.guardActive})">${
+                  c.guardActive ? "暂停守卫" : "启动守卫"
+                }</button>
+              <button class="btn-kill" onclick="killProcess('${
+                c.clientId
+              }')">杀进程</button>
+            </div>
+          </div>`;
+              })
+              .join("")
+      }
+    </div>
+  `;
+      }
+
+      async function toggleClientGuard(clientId, enabled) {
+        const r = await post(
+          "/api/rooms/" +
+            selectedRoomId +
+            "/clients/" +
+            clientId +
+            "/toggle-guard",
+          { enabled }
+        );
+        if (r.ok) toast(enabled ? "守卫已启动" : "守卫已暂停");
+        else toast(r.msg || "操作失败", true);
+      }
+
+      function killProcess(clientId) {
+        const pid = prompt("输入要结束的进程 PID:");
+        if (!pid || isNaN(pid)) return;
+        post(
+          "/api/rooms/" + selectedRoomId + "/clients/" + clientId + "/kill",
+          { pid: parseInt(pid) }
+        ).then((r) => {
+          if (r.ok) toast("已发送杀进程指令");
+          else toast(r.msg || "操作失败", true);
+        });
+      }
+
+      // ── 守卫控制 ──
+      function renderGuard(area) {
+        if (!selectedRoomId) {
+          area.innerHTML = '<div class="empty">请先选择一个教室</div>';
+          return;
+        }
+        const room = getSelectedRoom();
+        const clients = cachedClients[selectedRoomId] || [];
+
+        area.innerHTML = `
+    <div class="section-title">${room ? room.roomName : ""} — 守卫控制</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button class="btn btn-primary" onclick="startGuard()">▶ 启动全部守卫</button>
+      <button class="btn btn-outline" onclick="stopGuard()">⏸ 停止全部守卫</button>
+    </div>
+    <div class="section-title">各子机守卫状态 <span class="hint">${
+      clients.filter((c) => c.online).length
+    } 台在线</span></div>
+    ${
+      clients.filter((c) => c.online).length === 0
+        ? '<div class="empty">无在线子机</div>'
+        : clients
+            .filter((c) => c.online)
+            .map(
+              (c) => `<div class="guard-row">
         <div>
-          <div class="name">${c.studentName || '未绑定学生'}</div>
-          <div class="seat">${c.className || ''} ${c.seatNumber || ''}</div>
+          <div class="gname">${c.studentName || "未绑定"}</div>
+          <div class="ginfo">${c.ip} · 进程 ${c.processCount || 0}</div>
+        </div>
+        <div class="guard-toggle">
+          <button class="btn btn-sm ${
+            c.guardActive ? "btn-off" : "btn-on"
+          }" onclick="toggleClientGuard('${c.clientId}', ${!c.guardActive})">${
+                c.guardActive ? "暂停" : "启动"
+              }</button>
+          <button class="btn btn-sm btn-kill" onclick="killProcess('${
+            c.clientId
+          }')">杀进程</button>
+          <button class="btn btn-sm btn-outline" onclick="updateWhitelistForClient('${
+            c.clientId
+          }')">白名单</button>
+        </div>
+      </div>`
+            )
+            .join("")
+    }
+  `;
+      }
+
+      async function startGuard() {
+        const r = await post("/api/rooms/" + selectedRoomId + "/start");
+        if (r.ok) toast("已启动，推送 " + (r.sent || 0) + " 台");
+        else toast(r.msg || "启动失败", true);
+      }
+
+      async function stopGuard() {
+        const r = await post("/api/rooms/" + selectedRoomId + "/stop");
+        if (r.ok) toast("已停止，通知 " + (r.sent || 0) + " 台");
+        else toast(r.msg || "停止失败", true);
+      }
+
+      function updateWhitelistForClient(clientId) {
+        const text = prompt(
+          "输入白名单 JSON (processes, browsers, urls 数组):",
+          '{"processes":["studio.exe","code.exe"],"browsers":["chrome.exe"]}'
+        );
+        if (!text) return;
+        try {
+          const whitelist = JSON.parse(text);
+          post(
+            "/api/rooms/" +
+              selectedRoomId +
+              "/clients/" +
+              clientId +
+              "/update-whitelist",
+            { whitelist }
+          ).then((r) => {
+            if (r.ok) toast("白名单已下发");
+            else toast(r.msg || "下发失败", true);
+          });
+        } catch {
+          toast("JSON 格式错误", true);
+        }
+      }
+
+      // ── 广播 ──
+      function renderBroadcast(area) {
+        if (!selectedRoomId) {
+          area.innerHTML = '<div class="empty">请先选择一个教室</div>';
+          return;
+        }
+        const room = getSelectedRoom();
+        area.innerHTML = `
+    <div class="section-title">${room ? room.roomName : ""} — 广播消息</div>
+    <div class="broadcast-box">
+      <textarea id="bcMsg" placeholder="输入要广播给所有子机的消息..."></textarea>
+      <button class="btn btn-danger" onclick="doBroadcast()">📢 发送给本教室所有子机</button>
+      <div class="hint">⚠️ 消息会通过 WebSocket 实时推送到所有在线子机</div>
+    </div>
+  `;
+      }
+
+      async function doBroadcast() {
+        const msg = document.getElementById("bcMsg").value.trim();
+        if (!msg) {
+          toast("请输入消息", true);
+          return;
+        }
+        const r = await post("/api/rooms/" + selectedRoomId + "/broadcast", {
+          message: msg,
+        });
+        if (r.ok) {
+          toast("已发送给 " + (r.sent || 0) + " 台子机");
+          document.getElementById("bcMsg").value = "";
+        } else toast(r.msg || "发送失败", true);
+      }
+
+      // ── 白名单 ──
+      function renderWhitelist(area) {
+        if (!selectedRoomId) {
+          area.innerHTML = '<div class="empty">请先选择一个教室</div>';
+          return;
+        }
+        const room = getSelectedRoom();
+        // 获取当前房间配置
+        get("/api/rooms/" + selectedRoomId).then((r) => {
+          if (!r.ok) return;
+          const wl = r.room.whitelist || {
+            processes: [],
+            browsers: [],
+            urls: [],
+          };
+          const text = [
+            "// 允许的进程（每行一个进程名）",
+            wl.processes.join("\n") || "notepad.exe",
+            "",
+            "// 允许的浏览器（每行一个）",
+            wl.browsers.join("\n") || "chrome.exe",
+            "",
+            "// 允许的域名（每行一个）",
+            wl.urls.join("\n") || "example.com",
+          ].join("\n");
+          area.innerHTML = `
+      <div class="section-title">${room ? room.roomName : ""} — 白名单配置</div>
+      <div class="wl-editor">
+        <textarea id="wlText">${text}</textarea>
+        <div class="hint">保存后白名单会应用到本教室所有子机</div>
+        <button class="btn btn-primary" onclick="saveWhitelist()" style="margin-top:8px">💾 保存并下发</button>
+      </div>
+    `;
+        });
+      }
+
+      async function saveWhitelist() {
+        const raw = document.getElementById("wlText").value;
+        const lines = raw
+          .split("\n")
+          .map((l) => l.trim())
+          .filter((l) => l && !l.startsWith("//"));
+        const processes = [],
+          browsers = [],
+          urls = [];
+        const browserSet = new Set([
+          "chrome.exe",
+          "firefox.exe",
+          "msedge.exe",
+          "opera.exe",
+          "360se.exe",
+          "qqbrowser.exe",
+        ]);
+        lines.forEach((l) => {
+          if (
+            l.includes(".") &&
+            !l.includes(" ") &&
+            (l.includes(".com") ||
+              l.includes(".cn") ||
+              l.includes(".net") ||
+              l.includes(".org") ||
+              l.includes(".edu"))
+          ) {
+            urls.push(l);
+          } else if (browserSet.has(l.toLowerCase())) {
+            browsers.push(l);
+          } else {
+            processes.push(l);
+          }
+        });
+        const r = await put("/api/rooms/" + selectedRoomId, {
+          whitelist: { processes, browsers, urls },
+        });
+        if (r.ok) toast("白名单已保存");
+        else toast(r.msg || "保存失败", true);
+      }
+
+      // ── 违规日志 ──
+      async function renderViolations(area) {
+        let allLogs = [];
+        const roomsToCheck = selectedRoomId
+          ? [selectedRoomId]
+          : cachedRooms.map((r) => r.id);
+
+        for (const rid of roomsToCheck) {
+          const endpoint =
+            role === "admin"
+              ? "/api/admin/rooms/" + rid
+              : "/api/rooms/" + rid + "/clients";
+          const r = await get(endpoint);
+          if (!r.ok) continue;
+          const room = cachedRooms.find((cr) => cr.id === rid);
+          const clients =
+            role === "admin" && r.room ? r.room.clients || [] : r.clients || [];
+          clients.forEach((c) => {
+            const studentName = c.studentName || "未知";
+            if (c.violations) {
+              c.violations.forEach((v) => {
+                allLogs.push({
+                  ...v,
+                  studentName,
+                  ip: c.ip,
+                  hostname: c.hostname,
+                  roomName: room ? room.roomName : rid,
+                });
+              });
+            }
+          });
+        }
+        allLogs.sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0));
+
+        area.innerHTML = `
+    <div class="section-title">违规记录 ${
+      selectedRoomId ? "(当前教室)" : "(全部教室)"
+    } <span class="hint">共 ${allLogs.length} 条</span></div>
+    ${
+      allLogs.length === 0
+        ? '<div class="empty">暂无违规记录</div>'
+        : allLogs
+            .slice(0, 100)
+            .map(
+              (v) => `<div class="log-entry">
+        <div class="ltop">
+          <span class="lstudent">${v.studentName}</span>
+          <span class="ltime">${
+            v.time ? new Date(v.time).toLocaleString() : ""
+          }</span>
         </div>
         <div>
-          <span class="badge ${c.online ? 'online' : 'offline'}">${c.online ? '🟢 在线' : '🔴 离线'}</span>
-          <span class="badge ${c.guardActive ? 'guarding' : 'idle'}">${c.guardActive ? '🛡️ 守卫' : '⏸ 暂停'}</span>
+          <span class="lproc">⚠️ ${v.process}</span>
+          <span style="color:var(--muted);font-size:11px"> PID ${v.pid} · ${
+                v.title || ""
+              }</span>
         </div>
-      </div>
-      <div class="ip">${c.ip} · ${c.hostname}</div>
-      ${vText}
-      <div class="actions">
-        <button class="${c.guardActive ? 'btn-off' : 'btn-on'}" onclick="toggleGuard('${c.clientId}', ${!c.guardActive})">
-          ${c.guardActive ? '⏸ 暂停守卫' : '▶ 启动守卫'}
-        </button>
-      </div>
-    </div>`;
-  }).join('');
-
-  // 渲染违规日志
-  renderLogs();
-}
-
-function renderLogs() {
-  const logList = document.getElementById('logList');
-  const allLogs = [];
-  clients.forEach(c => {
-    if (c.violations) {
-      c.violations.forEach(v => {
-        allLogs.push({ ...v, studentName: c.studentName, ip: c.ip });
-      });
+        <div class="lroom">${v.roomName} · ${v.ip || ""} ${
+                v.hostname || ""
+              }</div>
+      </div>`
+            )
+            .join("")
     }
-  });
-  allLogs.sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0));
-  if (allLogs.length === 0) {
-    logList.innerHTML = '<div class="empty">暂无违规记录</div>';
-    return;
-  }
-  logList.innerHTML = allLogs.slice(0, 50).map(v => `
-    <div class="student-row">
-      <div class="info">
-        <div class="name" style="color:var(--red)">⚠️ ${v.name}</div>
-        <div class="meta">${v.studentName || v.ip} · ${v.time || ''} · ${v.title ? v.title.slice(0, 40) : ''}</div>
-      </div>
-    </div>`).join('');
-}
+  `;
+      }
 
-async function toggleGuard(clientId, enabled) {
-  await api(`/api/clients/${clientId}/toggle-guard`, {
-    method: 'POST', body: JSON.stringify({ enabled })
-  });
-  toast(enabled ? '已启动守卫' : '已暂停守卫');
-  await loadClients();
-}
+      // ══════════════════════════════════════
+      //  模态框
+      // ══════════════════════════════════════
+      function showModal(title, bodyHtml, onConfirm) {
+        closeModal();
+        const modal = document.createElement("div");
+        modal.className = "modal";
+        modal.id = "modal";
+        modal.innerHTML = `<div class="modal-box">
+    <h3>${title}</h3>
+    ${bodyHtml}
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" id="modalConfirm">确定</button>
+    </div>
+  </div>`;
+        document.body.appendChild(modal);
+        document.getElementById("modalConfirm").onclick = onConfirm;
+      }
+      function closeModal() {
+        const m = document.getElementById("modal");
+        if (m) m.remove();
+      }
 
-async function addStudent() {
-  const name = document.getElementById('sName').value.trim();
-  const cls = document.getElementById('sClass').value.trim();
-  const seat = document.getElementById('sSeat').value.trim();
-  if (!name) { toast('请输入学生姓名'); return; }
-  const d = await api('/api/students', { method: 'POST', body: JSON.stringify({ studentName: name, className: cls, seatNumber: seat }) });
-  if (d.ok) {
-    toast(`已添加 ${name}，接入码：${d.student.joinCode}`);
-    document.getElementById('sName').value = '';
-    document.getElementById('sClass').value = '';
-    document.getElementById('sSeat').value = '';
-    await loadStudents();
-  }
-}
+      // ══════════════════════════════════════
+      //  Toast
+      // ══════════════════════════════════════
+      function toast(msg, isError) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.className = "toast" + (isError ? " error" : "") + " show";
+        setTimeout(() => t.classList.remove("show"), 3000);
+      }
 
-async function deleteStudent(id) {
-  if (!confirm('确定删除该学生？')) return;
-  await api(`/api/students/${id}`, { method: 'DELETE' });
-  await loadStudents();
-}
-
-function renderStudents() {
-  const el = document.getElementById('studentList');
-  if (students.length === 0) {
-    el.innerHTML = '<div class="empty">暂无学生，请先添加</div>';
-    return;
-  }
-  el.innerHTML = students.map(s => {
-    const client = clients.find(c => c.studentId === s.id);
-    const status = client && client.online ? '🟢 在线' : '🔴 离线';
-    return `<div class="student-row">
-      <div class="info">
-        <div class="name">${s.studentName}</div>
-        <div class="meta">${s.className} ${s.seatNumber} · ${status}</div>
-      </div>
-      <div class="code">${s.joinCode}</div>
-      <button class="del-btn" onclick="deleteStudent('${s.id}')">删除</button>
-    </div>`;
-  }).join('');
-}
-
-async function saveWhitelist() {
-  const raw = document.getElementById('wlEditor').value;
-  // 简单解析：进程以 .exe 结尾；browsers 同理；urls 以域名格式
-  const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('//'));
-  const processes = [], browsers = [], urls = [];
-  const browserSet = new Set(['chrome.exe','firefox.exe','msedge.exe','opera.exe','360se.exe','qqbrowser.exe']);
-  lines.forEach(l => {
-    if (l.includes('.') && !l.includes(' ') && (l.includes('.com') || l.includes('.cn') || l.includes('.net') || l.includes('.org'))) {
-      urls.push(l);
-    } else if (browserSet.has(l.toLowerCase())) {
-      browsers.push(l);
-    } else {
-      processes.push(l);
-    }
-  });
-  const whitelist = { processes, browsers, urls };
-  // 广播给所有子机
-  const d = await api('/api/broadcast', { method: 'POST', body: JSON.stringify({ whitelist }) });
-  toast(d.ok ? `已保存并下发到 ${d.sent} 台子机` : '保存失败');
-}
-
-async function doBroadcast() {
-  const msg = document.getElementById('broadcastMsg').value.trim();
-  if (!msg) { toast('消息内容不能为空'); return; }
-  const d = await api('/api/broadcast', { method: 'POST', body: JSON.stringify({ message: msg }) });
-  if (d.ok) {
-    toast(`已发送给 ${d.sent} 台子机`);
-    document.getElementById('broadcastMsg').value = '';
-  }
-}
-
-// 页面加载时检查登录状态
-if (token) {
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('mainApp').style.display = 'block';
-  startPolling();
-}
-</script>
-</body>
+      // ══════════════════════════════════════
+      //  启动
+      // ══════════════════════════════════════
+      if (token && role) {
+        const saved = localStorage.getItem("guardian_user");
+        if (saved) {
+          try {
+            userInfo = JSON.parse(saved);
+          } catch {}
+        }
+        if (!userInfo) {
+          token = "";
+          role = "";
+          localStorage.removeItem("guardian_token");
+          localStorage.removeItem("guardian_role");
+          localStorage.removeItem("guardian_user");
+        } else {
+          document.getElementById("loginScreen").style.display = "none";
+          document.getElementById("mainApp").style.display = "block";
+          enterMain();
+        }
+      }
+    </script>
+  </body>
 </html>

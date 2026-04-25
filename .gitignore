@@ -6,6 +6,12 @@ release/
 # Runtime-generated data (not checked in)
 server/data/students.json
 server/data/sessions.json
+server/data/*.db
+server/data/*.db-shm
+server/data/*.db-wal
+server/data/*.sqlite
+server/data/*.sqlite-shm
+server/data/*.sqlite-wal
 client/data/remote-config.json
 
 # Generated documentation

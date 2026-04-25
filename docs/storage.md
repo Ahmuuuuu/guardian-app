@@ -41,7 +41,9 @@ CREATE TABLE teachers (
 
 首次启动 seed 默认管理员 `admin / guardian2026`。
 
-封装在 `store/db.js` 中，暴露：
+原子 SQL 访问封装在 `sql/db.js`；账号业务封装在 `service/account/account-service.js`。
+
+`sql/db.js` 暴露：
 
 ```js
 function initDB()                   // 建表 + seed 默认管理员
@@ -61,7 +63,7 @@ function deleteTeacher(id)          // 删除
 
 ## 内存 — rooms / students / clients
 
-全部在 `service/state.js` 中。
+业务逻辑在 `service/runtime/runtime-state-service.js`，底层 Map 容器在 `store/memory.js`。
 
 ### 顶层容器
 
@@ -135,4 +137,3 @@ clientRoomIndex Map           ← 反查索引
   bindAt: 1745568000000       // 绑定时间
 }
 ```
-

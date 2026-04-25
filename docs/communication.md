@@ -9,19 +9,20 @@
 ## 1. 系统拓扑
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     管控服务器 (guardian-server)                    │
-│                                                                  │
-│  HTTP Layer               WS Layer           Storage Layer       │
-│  ┌──────────┐       ┌───────────────┐       ┌───────────────┐   │
-│  │ REST API │       │  WS Gateway   │       │  PostgreSQL   │   │
-│  │ (Express)│       │  /guardian-ws │       │  + Redis      │   │
-│  │          │       │               │       │               │   │
-│  │ 教师认证  │       │ 消息路由       │       │ 持久化 + 缓存  │   │
-│  │ 房间 CRUD │       │ 房间管理       │       │               │   │
-│  │ 静态页    │       │ 指令下发       │       │               │   │
-│  └────┬─────┘       └──────┬────────┘       └───────────────┘   │
-└───────┼────────────────────┼───────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                     管控服务器 (guardian-server)                   │
+│                                                                 │
+│  HTTP Layer               WS Layer           Storage Layer      │
+│  ┌──────────┐       ┌───────────────┐       ┌──────────────┐   │
+│  │ REST API │       │  WS Gateway   │       │  SQLite      │   │
+│  │ (Express)│       │  /guardian-ws │       │  (admins +   │   │
+│  │          │       │               │       │   teachers)  │   │
+│  │ admin 认证│       │  bind / 心跳   │       │              │   │
+│  │ 教师 CRUD │       │ 违规上报       │       │ In-Memory Map│   │
+│  │ 房间 CRUD │       │ 指令下发       │       │ (rooms +     │   │
+│  │ 静态页    │       │               │       │  clients)    │   │
+│  └────┬─────┘       └──────┬────────┘       └──────────────┘   │
+└───────┼────────────────────┼──────────────────────────────────┘
         │ HTTP               │ WS
         │                    │
    ┌────┴────────┐    ┌──────┴──────────┐    ┌────────────────┐
@@ -32,7 +33,10 @@
    └─────────────┘    └─────────────────┘    └────────────────┘
 ```
 
-所有端都是 client，角色不同。Server 是纯中枢，做认证、路由、状态管理。
+角色体系：
+- **admin**（系统管理员）：管理教师账号，查看全局房间，不可直接操作房间守卫
+- **teacher**（教师）：管理自己的房间、学生名单、下发指令
+- **student**（学生机客户端）：WS 连接，心跳上报，接收指令
 
 ---
 
@@ -40,36 +44,24 @@
 
 | 链路 | 协议 | 方向 | 说明 |
 |------|------|------|------|
-| 教师端 ↔ 管控服务器 | **HTTP REST** (JSON) | 双向 | 登录注册、房间 CRUD、批量操作 |
-| 教师端 ↔ 管控服务器 | **WebSocket** (JSON) | 全双工 | 订阅房间状态、实时推送 |
+| 教师端 ↔ 管控服务器 | **HTTP REST** (JSON) | 双向 | 管理员登录、教师 CRUD、房间 CRUD、学生管理 |
 | 学生端 ↔ 管控服务器 | **WebSocket** (JSON) | 全双工 | 心跳上报、违规上报、接收指令 |
 
-教师端两条通道：HTTP 做 CRUD，WS 做实时推送。
+教师端 HTTP 做 CRUD，通过轮询（每 3s）获取实时状态，暂未实现 WS 订阅推送。
 
 ---
 
-## 3. 通信协议
+## 3. 数据流
 
-见 `docs/protocol.md`，包含：
+### 持久层
 
-- WS 连接生命周期
-- 消息类型总表（学生机→服务器 3 种，服务器→学生机 7 种）
-- REST API 路径表
-- Electron IPC 方法表
-
-## 4. 技术栈
-
-见 `docs/tech-stack.md`，核心选型：
-
-| 层面 | 小规模方案 | 中大规模方案 |
-|------|-----------|-------------|
-| 持久化 | SQLite | PostgreSQL |
-| Runtime 状态 | In-Memory Map | Redis |
-| WS 广播 | Map.forEach + ws.send() | Redis Pub/Sub |
-| 违规写入 | 直接写 | 攒批缓冲区 → batch INSERT |
-| 进程模型 | 单进程 | Cluster / 多服务器 |
-
-## 5. 核心流程
+| 数据 | 存储位置 | 说明 |
+|------|---------|------|
+| admins | SQLite `guardian.db` | SHA256 密码哈希，首次启动 seed 默认 admin/guardian2026 |
+| teachers | SQLite `guardian.db` | 工号唯一，管理员创建 |
+| rooms | 内存 Map | roomId → Room 对象，随进程重启丢失 |
+| clients | 内存 Map + 房间内嵌 Map | clientId → ClientInfo，WS 连接对象无法序列化 |
+| 违规记录 | 内存（ClientInfo.violations） | 最多保留最近 100 条，不落盘 |
 
 ### 学生上机
 
@@ -81,13 +73,13 @@
   │◄── { welcome, clientId }       │                          │
   │                                │                          │
   │  { bind, roomCode,            │                          │
-  │    studentId, studentName }    │                          │
+  │    studentId, name, hostname } │                          │
   │ ──────────────────────────────►│                          │
-  │                                │ 验证 roomCode             │
+  │                                │ 验证 roomCode + studentId │
   │◄── { bind-ack, ok, roomId }    │                          │
   │                                │                          │
-  │  { heartbeat } 每 5s           │  WS 推送新上线            │
-  │ ──────────────────────────────►│ ─────────────────────────►│
+  │  { heartbeat } 每 5s           │  教师端轮询看到新上线      │
+  │ ──────────────────────────────►│                          │
   │◄── { heartbeat-ack }           │                          │
 ```
 
@@ -102,8 +94,7 @@
   │                                │      enabled: true }     │
   │                                │ ───────────────────────►│
   │                                │                main.js: 启动守卫
-  │  WS 推送: 子机状态变更          │                          │
-  │◄──────────────────────────────│                          │
+  │◄── { ok: true, sent: N }       │                          │
 ```
 
 ### 违规检测
@@ -114,11 +105,100 @@
   │  PowerShell 扫描进程            │                          │
   │  白名单比对 → 违规               │                          │
   │                                │                          │
-  │  WS { heartbeat, violations }  │                          │
+  │  WS { violations: [...] }      │                          │
   │ ──────────────────────────────►│                          │
-  │                                │ 内存缓存 → 攒批缓冲区     │
-  │                                │ 每 10s / 100 条 → 写 DB  │
+  │                                │ 附加到 client.violations  │
+  │                                │ 保留最近 100 条           │
   │                                │                          │
-  │                                │ WS 推送违规通知           │
-  │                                │ ───────────────────────►│
+  │                                │  教师端轮询拉取           │
+  │                                │ ◄─────────────────────── │
 ```
+
+---
+
+## 4. REST API 路径表
+
+| 方法 | 路径 | 认证 | 角色 | 说明 |
+|------|------|------|------|------|
+| POST | `/api/admin/login` | 否 | — | 管理员登录 |
+| GET | `/api/admin/teachers` | admin | admin | 教师列表 |
+| POST | `/api/admin/teachers` | admin | admin | 创建教师 |
+| GET | `/api/admin/teachers/:id` | admin | admin | 教师详情 |
+| PUT | `/api/admin/teachers/:id` | admin | admin | 更新教师 |
+| DELETE | `/api/admin/teachers/:id` | admin | admin | 删除教师 |
+| GET | `/api/admin/rooms` | admin | admin | 全局房间列表 |
+| GET | `/api/admin/rooms/:id` | admin | admin | 任意房间详情 |
+| DELETE | `/api/admin/rooms/:id` | admin | admin | 删除任意房间 |
+| POST | `/api/teacher/login` | 否 | — | 教师登录 |
+| PUT | `/api/teacher/password` | teacher | teacher | 修改密码 |
+| GET | `/api/rooms` | teacher | teacher | 我的房间列表 |
+| POST | `/api/rooms` | teacher | teacher | 创建房间 |
+| GET | `/api/rooms/:id` | teacher | teacher | 房间详情 |
+| PUT | `/api/rooms/:id` | teacher | teacher | 更新房间配置 |
+| DELETE | `/api/rooms/:id` | teacher | teacher | 删除房间 |
+| POST | `/api/rooms/:id/start` | teacher | teacher | 启动守卫 |
+| POST | `/api/rooms/:id/stop` | teacher | teacher | 停止守卫 |
+| POST | `/api/rooms/:id/broadcast` | teacher | teacher | 广播消息 |
+| GET | `/api/rooms/:id/students` | teacher | teacher | 学生列表 |
+| POST | `/api/rooms/:id/students` | teacher | teacher | 添加学生 |
+| DELETE | `/api/rooms/:id/students/:studentId` | teacher | teacher | 移除学生 |
+| GET | `/api/rooms/:id/clients` | teacher | teacher | 房间内子机列表 |
+| POST | `/api/rooms/:id/clients/:cid/toggle-guard` | teacher | teacher | 开关指定子机守卫 |
+| POST | `/api/rooms/:id/clients/:cid/kill` | teacher | teacher | 结束指定子机进程 |
+| POST | `/api/rooms/:id/clients/:cid/update-whitelist` | teacher | teacher | 下发白名单 |
+| POST | `/api/student/bind` | 否 | — | HTTP 绑定（子机备用入口） |
+
+---
+
+## 5. WebSocket 协议（管控服务器 ↔ 学生端）
+
+### 连接生命周期
+
+```
+WS connect /guardian-ws
+  │
+  ├─ 生成 clientId, 写入 clients Map
+  ├─ 发送 { type: "welcome", clientId }
+  └─ 启动 30s bind 超时定时器
+       │
+       ├─ 30s 内收到 bind
+       │    ├─ 验证 roomCode → findRoomByJoinCode()
+       │    ├─ 验证 studentId → findStudentInRoom()
+       │    ├─ 绑定到房间 → bindClient()
+       │    ├─ 清除定时器
+       │    └─ 发送 { bind-ack, ok, roomId, roomName }
+       │
+       └─ 30s 超时 → ws.close(4000, 'bind timeout'), 清理 clients
+```
+
+### 消息类型
+
+#### 学生机 → 管控服务器
+
+| type | 时机 | 载荷 | 服务端响应 |
+|------|------|------|-----------|
+| `bind` | 连接后 30s 内 | `{ roomCode, studentId, name, hostname }` | `bind-ack` |
+| `heartbeat` | 每 5s | `{ guardActive, processCount, violations[] }` | `heartbeat-ack` |
+| `violation-log` | 发现违规时 | `{ violations[] }` | 无确认 |
+
+#### 管控服务器 → 学生机
+
+| type | 时机 | 载荷 | 说明 |
+|------|------|------|------|
+| `welcome` | WS 连接 | `{ clientId }` | 标识连接 |
+| `bind-ack` | bind 处理完 | `{ ok, roomId, roomName }` 或 `{ ok: false, msg }` | 失败不关闭连接 |
+| `heartbeat-ack` | 收到 heartbeat | `{}` | 仅确认 |
+| `toggle-guard` | 教师远程开关 | `{ enabled: boolean }` | 启停守卫循环 |
+| `update-whitelist` | 教师下发白名单 | `{ whitelist }` | 更新客户端白名单 |
+| `force-kill-process` | 教师结束进程 | `{ pid: number }` | taskkill |
+| `broadcast` | 教师发通知 | `{ message: string }` | 弹窗显示 |
+
+### 异常处理
+
+| 场景 | 行为 |
+|------|------|
+| WS 断开 | 服务端清理 clients，调用 deleteClient() |
+| 服务端宕机 | 学生端自动重连，无限重试 |
+| bind 失败（roomCode/studentId 无效） | 返回 `{ ok: false, msg }`，不关闭连接，允许重试 |
+| 心跳超时 120s | 每 30s 扫描，pruneInactiveClients() terminate 并清理 |
+| 重复 studentId 绑定 | 踢掉旧连接，新连接接管 |

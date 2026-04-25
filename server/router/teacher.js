@@ -1,12 +1,12 @@
 const { Router } = require('express');
-const store = require('../service/mock-state');
+const accountService = require('../service/account/account-service');
 const { makeToken, requireTeacher } = require('../utils/auth');
 
 const router = Router();
 
 router.post('/login', (req, res) => {
   const { staffId, password } = req.body || {};
-  const teacher = store.verifyTeacher(staffId, password);
+  const teacher = accountService.verifyTeacher(staffId, password);
   if (!teacher) {
     return res.status(401).json({ ok: false, msg: '工号或密码错误' });
   }
@@ -22,7 +22,7 @@ router.post('/login', (req, res) => {
 
 router.put('/password', ...requireTeacher, (req, res) => {
   const { oldPassword, newPassword } = req.body || {};
-  const result = store.updateTeacherPassword(req.auth.teacherId, oldPassword, newPassword);
+  const result = accountService.updateTeacherPassword(req.auth.teacherId, oldPassword, newPassword);
   if (!result.ok) {
     return res.status(result.status || 400).json({ ok: false, msg: result.msg });
   }

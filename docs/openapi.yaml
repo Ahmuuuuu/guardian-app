@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     Guardian 后端 REST API 文档。
-    当前实现为“接口优先 + 内存态占位”，不包含数据库持久化。
+    SQLite 持久化 admins/teachers，rooms/clients 全量在内存。
     WebSocket 协议见 `docs/asyncapi.yaml`。
 externalDocs:
   description: Guardian WebSocket 协议（AsyncAPI）
@@ -1015,12 +1015,13 @@ components:
 
     ProcessEntry:
       type: object
-      required: [name, enabled]
       properties:
         name:
           type: string
+          description: 进程名，如 "notepad.exe"
         path:
           type: string
+          description: 可选完整路径
         description:
           type: string
         enabled:
@@ -1028,7 +1029,6 @@ components:
 
     BrowserEntry:
       type: object
-      required: [name, enabled]
       properties:
         name:
           type: string
@@ -1039,7 +1039,6 @@ components:
 
     UrlRule:
       type: object
-      required: [pattern, type]
       properties:
         pattern:
           type: string
@@ -1078,22 +1077,33 @@ components:
         maxAllowed:
           type: integer
 
+    WhitelistItem:
+      oneOf:
+        - type: string
+          description: 纯字符串，如 "notepad.exe"
+        - $ref: '#/components/schemas/ProcessEntry'
+
     RoomWhitelist:
       type: object
       required: [processes, browsers, urls]
       properties:
         processes:
           type: array
+          description: 允许进程名，每项可为纯字符串或对象
           items:
-            $ref: '#/components/schemas/ProcessEntry'
+            $ref: '#/components/schemas/WhitelistItem'
         browsers:
           type: array
+          description: 允许浏览器名，每项可为纯字符串或对象
           items:
-            $ref: '#/components/schemas/BrowserEntry'
+            $ref: '#/components/schemas/WhitelistItem'
         urls:
           type: array
+          description: 允许域名，每项可为纯字符串或 UrlRule 对象
           items:
-            $ref: '#/components/schemas/UrlRule'
+            oneOf:
+              - type: string
+              - $ref: '#/components/schemas/UrlRule'
 
     Student:
       type: object

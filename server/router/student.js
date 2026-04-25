@@ -1,27 +1,27 @@
 const { Router } = require('express');
-const store = require('../service/mock-state');
+const stateService = require('../service/runtime/runtime-state-service');
 
 const router = Router();
 
-router.post('/bind', (req, res) => {
+router.post('/bind', async (req, res) => {
   const { joinCode, studentId, name, hostname, clientId } = req.body || {};
 
   if (!joinCode || !studentId) {
     return res.status(400).json({ ok: false, msg: '缺少接入码或学号' });
   }
 
-  const room = store.findRoomByJoinCode(joinCode);
+  const room = await stateService.findRoomByJoinCode(joinCode);
   if (!room) {
     return res.status(404).json({ ok: false, msg: '无效的接入码' });
   }
 
-  const student = store.findStudentInRoom(room, studentId);
+  const student = await stateService.findStudentInRoom(room, studentId);
   if (!student) {
     return res.status(404).json({ ok: false, msg: '该学号未在本房间注册' });
   }
 
   if (clientId) {
-    store.bindClient(clientId, {
+    await stateService.bindClient(clientId, {
       roomId: room.id,
       studentId: student.studentId,
       studentName: name || student.name,

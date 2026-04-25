@@ -32,22 +32,29 @@ guardian-app/
 │   │   ├── server.js               # 入口：创建 HTTP 服务
 │   │   └── app.js                  # Express：挂载中间件 + 路由
 │   ├── router/
-│   │   ├── auth.js                 # POST /api/admin/login
-│   │   ├── students.js             # CRUD /api/students
-│   │   ├── clients.js              # GET /api/clients + 远程管控
-│   │   ├── broadcast.js            # POST /api/broadcast
-│   │   └── bind.js                 # POST /api/student/bind
+│   │   ├── admin.js                # /api/admin/*
+│   │   ├── teacher.js              # /api/teacher/*
+│   │   ├── rooms.js                # /api/rooms/*
+│   │   └── student.js              # /api/student/*
 │   ├── service/
-│   │   ├── state.js                # 共享状态 (students[], clients Map)
-│   │   └── ws-handler.js           # WebSocket 消息处理
+│   │   ├── account/
+│   │   │   └── account-service.js  # admin, teacher 账号业务（校验/哈希/错误映射）
+│   │   ├── runtime/
+│   │   │   └── runtime-state-service.js  # 房间/学生/客户端状态业务
+│   │   ├── gateway/
+│   │   │   └── ws-gateway.js       # WebSocket 接入与协议分发
+│   │   └── README.md               # service 分层说明
+│   ├── store/
+│   │   └── memory.js               # 内存 Map 原子存取
+│   ├── sql/
+│   │   ├── db.js                   # SQLite 原子访问
+│   │   ├── schema.sql              # 表结构
+│   │   └── seed.sql                # 默认管理员 seed
 │   ├── utils/
-│   │   ├── storage.js              # JSON 文件读写
 │   │   └── auth.js                 # Token + requireAuth
 │   ├── assets/
 │   │   └── control.html            # 教师端浏览器 UI
-│   ├── data/
-│   │   ├── admin.json              # 管理员账号
-│   │   └── students.json           # 学生记录
+│   ├── data/                       # SQLite 数据文件
 │   ├── desktop/
 │   │   ├── main.js                 # 教师端桌面程序 (Electron)
 │   │   └── icon.png
@@ -66,6 +73,19 @@ guardian-app/
 
 ---
 
+## Server 分层说明
+
+- `router`：只做 HTTP 参数解析和响应，不直接操作底层存储。
+- `service`：业务编排层。
+  - `account-service` 处理管理员/教师账号逻辑。
+  - `runtime-state-service` 处理房间、学生、在线客户端状态。
+  - `ws-gateway` 处理 WebSocket 协议和消息入口。
+- `store`：内存存储原子操作（`Map` 读写）。
+- `sql`：SQLite 原子操作（建表、seed、CRUD）。
+
+依赖方向固定为：
+`router` / `src` -> `service` -> (`store` / `sql`)
+
 ## 开发
 
 ```bash
@@ -83,13 +103,16 @@ npm start                    # 启动 HTTP+WS 服务器 → http://localhost:384
 
 # 教师端 (桌面版，在服务器启动后另开终端)
 npm run desktop              # Electron 窗口加载管理界面
+
+# 测试
+node test/real-world-sim.js                 
 ```
 
 ## 启动流程
 
 1. 在服务器上运行 `cd server && npm start`
 2. 教师浏览器打开 `http://server-ip:3847`，用 `admin / guardian2026` 登录
-3. 「添加学生」→ 输入姓名/班级/座位号 → 生成 6 位接入码
+3. 创建房间并维护学生名单（学号 + 姓名），拿到 6 位接入码
 4. 学生在 `client/` 启动 Guardian → 远程管控 Tab → 输入服务器地址 + 接入码绑定
 5. 教师在管控界面查看子机状态、远程开关守卫、下发白名单
 

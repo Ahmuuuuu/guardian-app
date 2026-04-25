@@ -5,164 +5,132 @@
 ## 1. 配置层级
 
 ```
-全局默认配置 (server/data/default-config.json)
+runtime-state-service.js 内置默认值 (defaultRoomConfig)
     │
-    ├── 教师账户注册时继承 ──→ 教师级别默认配置 (可选)
-    │
-    ├── 教师创建房间时覆盖 ──→ 房间配置 (持久化到 rooms.json)
-    │
-    └── 教师实时指令覆盖 ──→ 运行时配置 (仅内存，不持久化)
+    └── 教师创建房间时覆盖 ──→ 房间配置 (内存 Map，不落盘)
+              │
+              └── 教师实时指令覆盖 ──→ 运行时配置 (直接修改 room 对象)
 ```
 
-**合并规则**: 运行时配置 > 房间持久配置 > 全局默认
+**合并规则**: 运行时指令 覆盖 → 房间存储配置 覆盖 → 代码默认值
+
+当前所有房间配置存储在内存 `store/memory.js` 的 `rooms` Map 中，服务器重启后丢失。不存在 JSON 文件持久化。
 
 ---
 
-## 2. 房间完整配置结构
+## 2. 代码默认配置
+
+定义在 `server/service/runtime/runtime-state-service.js` 的 `defaultRoomConfig()` 中：
+
+```js
+{
+  guard: {
+    checkInterval: 3000,       // 检测间隔 (ms)，范围 [1000, 30000]
+    notifyOnly: false,          // true=仅通知不强杀
+    autoStartGuard: true        // 绑定后自动启动守卫
+  },
+  schedule: {
+    autoMode: false,            // 到点自动启停（暂未实现定时逻辑）
+    gracePeriod: 15,            // 迟到宽容 (分钟)
+    allowLateJoin: true         // 宽容期后仍可加入
+  },
+  whitelist: {
+    processes: [],              // 允许进程名数组
+    browsers: [],               // 允许浏览器名数组
+    urls: []                    // 允许 URL 数组
+  },
+  violations: {
+    maxAllowed: 0               // 0 = 不限制违规次数
+  }
+}
+```
+
+### 创建时覆盖
+
+```js
+// runtime-state-service.js mergeRoomConfig()
+// 传入的字段覆盖默认值，缺失字段保留默认
+{
+  guard: { ...defaults.guard, ...source.guard },
+  schedule: { ...defaults.schedule, ...source.schedule },
+  whitelist: {
+    processes: source.whitelist?.processes || defaults.whitelist.processes,
+    browsers:  source.whitelist?.browsers  || defaults.whitelist.browsers,
+    urls:      source.whitelist?.urls      || defaults.whitelist.urls
+  },
+  violations: { ...defaults.violations, ...source.violations }
+}
+```
+
+---
+
+## 3. 房间完整配置结构
 
 ```typescript
-interface RoomConfig {
-  /** 房间基本信息 */
-  roomName: string;            // 如 "301 机房"
-  joinCode: string;            // 6 位接入码，创建时自动生成
+interface Room {
+  id: string;                    // "r_a1b2c3d4", 随机生成
+  roomName: string;              // 如 "301 机房"
+  joinCode: string;              // 6 位大写接入码，字母去 I/O，数字去 0/1
+  teacherId: string;             // 所属教师 ID
+  createdAt: string;             // ISO 8601
 
-  /** 守卫行为 */
   guard: GuardConfig;
-
-  /** 时间窗口 (null = 完全手动) */
-  schedule?: ScheduleConfig;
-
-  /** 白名单 (每个房间独立) */
+  schedule: ScheduleConfig;
   whitelist: RoomWhitelist;
-
-  /** 违规策略 */
   violations: ViolationConfig;
-}
 
-// ─────────────────────────────────────
+  students: Student[];           // 本房间注册学生
+  clients: Map<string, Client>;  // 本房间在线子机 (内存)
+}
 
 interface GuardConfig {
-  checkInterval: number;       // 检测间隔 (ms)
-                               //   默认 3000，老旧电脑建议 5000-10000
-                               //   范围 [1000, 30000]
-
-  notifyOnly: boolean;         // true  = 仅通知，不强杀
-                               // false = 自动结束违规进程
-                               // 考试场景建议 false
-
-  autoStartGuard: boolean;     // true  = 学生绑定后自动开启守卫
-                               // false = 需教师手动开启
-                               // 考试场景建议 true
+  checkInterval: number;         // 检测间隔 ms
+  notifyOnly: boolean;
+  autoStartGuard: boolean;
 }
-
-// ─────────────────────────────────────
 
 interface ScheduleConfig {
-  autoMode: boolean;           // true  = 到点自动启停守卫
-                               // false = 手动控制，忽略以下时间字段
-
-  startTime?: string;          // ISO 8601，如 "2026-04-25T08:00:00+08:00"
-                               // autoMode=true 时必填
-
-  endTime?: string;            // ISO 8601，autoMode=true 时必填
-
-  gracePeriod: number;         // 迟到宽容 (分钟)
-                               //   开考后 gracePeriod 分钟内仍允许绑定
-                               //   超过后拒绝新 bind 请求
-
-  allowLateJoin: boolean;      // true  = gracePeriod 后仍可加入 (但记录迟到)
-                               // false = gracePeriod 后拒绝所有新绑定
+  autoMode: boolean;             // 到点自动启停
+  gracePeriod: number;           // 迟到宽容 (分钟)
+  allowLateJoin: boolean;        // 宽容期后仍可加入
 }
 
-// ─────────────────────────────────────
-
 interface ViolationConfig {
-  maxAllowed: number;          // 0 = 不限制违规次数
-                               // N = 允许 N 次违规后触发策略
-                               // 考试场景建议 0 (无限制，仅记录)
+  maxAllowed: number;            // 0 = 不限制，N = 允许 N 次后触发策略
+}
 
-  notifyTeacher: boolean;      // true = 每条违规实时推送到教师端
+interface Student {
+  studentId: string;             // 学号，同一房间内唯一
+  name: string;                  // 姓名
 }
 ```
 
 ---
 
-## 3. 白名单类型设计
+## 4. 白名单结构
+
+白名单作为房间配置的一部分，由三个数组组成：
 
 ```typescript
-// ─────────────────────────────────────
-// 进程白名单条目
-// ─────────────────────────────────────
-interface ProcessEntry {
-  name: string;                // 进程名，精确匹配 exe 名
-                               //   如 "notepad.exe"、"exam.exe"
-                               //   大小写不敏感
-
-  path?: string;              // 可选：完整可执行文件路径
-                               //   如 "C:\Program Files\Exam\exam.exe"
-                               //   填写后同时校验路径，防止同名欺骗
-                               //   不填则仅匹配进程名
-
-  description?: string;       // 说明，如 "考试答题系统"
-                               //   仅用于教师端 UI 展示
-
-  enabled: boolean;            // true  = 在白名单中生效
-                               // false = 临时禁用但保留记录
-}
-
-// ─────────────────────────────────────
-// 浏览器条目
-// ─────────────────────────────────────
-interface BrowserEntry {
-  name: string;                // 如 "chrome.exe"、"msedge.exe"
-                               //   大小写不敏感
-
-  description?: string;       // 仅 UI 展示
-
-  enabled: boolean;
-}
-
-// ─────────────────────────────────────
-// URL 规则
-// ─────────────────────────────────────
-interface UrlRule {
-  pattern: string;             // 匹配模式，支持通配符
-                               //   exam.com         → 精确域名 (含所有子路径)
-                               //   *.exam.com       → 子域名通配
-                               //   exam.com/*       → 指定路径及其子路径
-                               //   *.exam.com/*     → 子域名 + 路径
-
-  type: "allow" | "deny";     // allow = 允许访问
-                               // deny  = 禁止访问
-                               // 优先匹配 deny，再匹配 allow
-
-  description?: string;       // 如 "考试服务器地址"
-}
-
-// ─────────────────────────────────────
-// 完整白名单结构
-// ─────────────────────────────────────
 interface RoomWhitelist {
-  processes: ProcessEntry[];   // 考试允许运行的软件
-  browsers: BrowserEntry[];    // 允许的浏览器
-  urls: UrlRule[];             // URL 访问规则
+  processes: string[];           // 进程名，如 ["notepad.exe", "exam.exe"]
+  browsers: string[];            // 浏览器名，如 ["chrome.exe", "msedge.exe"]
+  urls: string[];                // 允许域名，如 ["exam.xxx.com"]
 }
 ```
+
+> 注：当前实现中数组元素为简单字符串。后续可扩展为对象格式 `{ name, path?, description?, enabled }`。
 
 ### 白名单匹配流程
 
 ```
-收到违规检测请求 (进程名 / URL)
+子机上报违规检测 (进程名 / URL)
   │
-  ├─ 命中 process[].name (且 enabled=true)
+  ├─ 命中 processes[] (大小写不敏感)
   │     └─ 放行
   │
-  ├─ 命中 browsers[].name (且 enabled=true)
-  │     ├─ 是浏览器进程，继续检查 URL
-  │     │     ├─ 无 URL 规则 → 放行
-  │     │     └─ 按 urls[].pattern 匹配
-  │     │           ├─ 命中 deny → 拦截
-  │     │           └─ 仅命中 allow → 放行
+  ├─ 命中 browsers[] (大小写不敏感)
+  │     ├─ 有 URL 检测需求 → 匹配 urls[]
   │     └─ 无 URL 检测需求 → 放行
   │
   └─ 未命中任何白名单 → 违规
@@ -170,117 +138,167 @@ interface RoomWhitelist {
 
 ---
 
-## 4. JSON 持久化示例
+## 5. 存储示例
 
-### rooms.json
+### SQLite — admins + teachers（持久化）
 
-```json
-[
-  {
-    "id": "r_a1b2c3d4",
-    "teacherId": "t_xyz",
-    "roomName": "301 机房",
-    "joinCode": "A7K2F3",
-    "createdAt": "2026-04-25T08:00:00.000Z",
-    "guard": {
-      "checkInterval": 3000,
-      "notifyOnly": false,
-      "autoStartGuard": true
-    },
-    "schedule": {
-      "autoMode": false,
-      "gracePeriod": 15,
-      "allowLateJoin": true
-    },
-    "whitelist": {
-      "processes": [
-        { "name": "exam.exe", "path": "C:\\Exam\\exam.exe", "description": "考试系统", "enabled": true },
-        { "name": "notepad.exe", "description": "记事本", "enabled": true },
-        { "name": "calc.exe", "description": "计算器", "enabled": false }
-      ],
-      "browsers": [
-        { "name": "chrome.exe", "description": "仅用于考试系统", "enabled": true }
-      ],
-      "urls": [
-        { "pattern": "exam.xxx.com", "type": "allow", "description": "考试服务器" },
-        { "pattern": "*.baidu.com", "type": "deny", "description": "禁止搜索" }
-      ]
-    },
-    "violations": {
-      "maxAllowed": 0,
-      "notifyTeacher": true
-    }
-  }
-]
+```sql
+-- admins: 管理员账号
+id         TEXT PRIMARY KEY,    -- "a_xxx"
+username   TEXT UNIQUE NOT NULL,
+password   TEXT NOT NULL,       -- SHA256 哈希
+created_at TEXT NOT NULL;
+
+-- teachers: 教师账号
+id         TEXT PRIMARY KEY,    -- "t_xxx"
+staff_id   TEXT UNIQUE NOT NULL,
+name       TEXT NOT NULL,
+password   TEXT NOT NULL,       -- SHA256 哈希
+created_at TEXT NOT NULL;
 ```
 
-### teachers.json
-
-```json
-[
-  {
-    "id": "t_xyz",
-    "username": "zhang",
-    "passwordHash": "sha256$...",
-    "displayName": "张老师",
-    "createdAt": "2026-04-20T10:00:00.000Z"
-  }
-]
-```
-
-### clients (内存 Map，不持久化)
+### 内存 — rooms + clients
 
 ```
-Map {
-  "c_a1b2c3" => {
-    ws: <WebSocket>,
-    ip: "192.168.1.10",
-    clientId: "c_a1b2c3",
-    studentId: "2024001",
-    studentName: "张三",
-    roomId: "r_a1b2c3d4",
-    hostname: "PC-01",
-    lastSeen: 1745568000000,
-    guardActive: true,
-    violations: [],
-    processCount: 8,
-    bindAt: 1745568000000
-  }
+rooms Map (roomId → Room)
+├─ "r_a1b2c3" → Room {
+│    roomName: "301 机房",
+│    joinCode: "A7K2F3",
+│    students: [ { studentId:"2024001", name:"张三" }, ... ],
+│    clients: Map (clientId → ClientInfo)
+│     └─ "c_xxx1" → { studentId, ws, ip, guardActive, ... }
+│  }
+└─ ...
+
+clientRoomIndex Map (clientId → roomId)     ← 反查索引
+clients Map (clientId → ClientInfo)         ← 全局子机索引（含未绑定）
+```
+
+### ClientInfo（纯内存，不持久化）
+
+```js
+{
+  ws: <WebSocket>,
+  ip: "192.168.1.10",
+  clientId: "c_a1b2c3",
+  studentId: "2024001",
+  studentName: "张三",
+  hostname: "PC-01",
+  roomId: "r_a1b2c3d4",
+  guardActive: true,
+  processCount: 8,
+  violations: [],
+  lastSeen: 1745568000000,
+  bindAt: 1745568000000
 }
 ```
 
 ---
 
-## 5. 配置变更传播路径
+## 6. 配置变更传播路径
 
 ```
-教师端 UI                       服务器                        学生机
-  │                               │                            │
-  │ PUT /api/rooms/:id            │                            │
-  │ { whitelist: {...} }          │                            │
-  │ ─────────────────────────────►│                            │
-  │                               ├─ 更新 rooms.json           │
-  │                               ├─ 遍历 room 内在线子机      │
-  │                               │                            │
-  │                               │ WS { update-whitelist }    │
-  │                               │ ──────────────────────────►│
-  │                               │          main.js 更新白名单 │
-  │                               │          IPC 通知 renderer  │
-  │                               │                            │
-  │ ◄── { ok: true }              │                            │
+教师端 UI                       服务器 (只改内存，不写磁盘)
+  │                               │
+  │ PUT /api/rooms/:id            │
+  │ { whitelist: [...] }          │
+  │ ─────────────────────────────►│
+  │                               ├─ state.updateRoom() → 直接改 room 对象
+  │                               ├─ 教师可选择性下发到在线子机
+  │                               │
+  │                               │ POST .../clients/:cid/update-whitelist
+  │                               │ WS { update-whitelist, whitelist }
+  │                               │ ──────────────────────────►
+  │                               │    main.js 更新白名单
+  │                               │
+  │ ◄── { ok: true, room: {...} } │
 ```
 
 ```
-教师端 UI                       服务器                        学生机
-  │                               │                            │
-  │ POST /api/rooms/:id/start     │                            │
-  │ ─────────────────────────────►│                            │
-  │                               ├─ 遍历 room 内在线子机      │
-  │                               │                            │
-  │                               │ WS { toggle-guard,        │
-  │                               │      enabled: true }       │
-  │                               │ ──────────────────────────►│
-  │                               │          main.js 启动守卫   │
-  │                               │                            │
-  │ ◄── { ok: true, sent: 30 }    │                            │
+教师端 UI                       服务器
+  │                               │
+  │ POST /api/rooms/:id/start     │
+  │ ─────────────────────────────►│
+  │                               ├─ state.sendToRoom(roomId, { toggle-guard, enabled: true })
+  │                               │
+  │                               │ WS { toggle-guard, enabled: true }
+  │                               │ ──────────────────────────►
+  │                               │    main.js 启动守卫
+  │                               │
+  │ ◄── { ok: true, sent: 30 }    │
+```
+
+---
+
+## 7. WebSocket 准入控制参数（WS_ADMISSION_*）
+
+为缓解瞬时连接风暴导致的 `ECONNREFUSED`，当前服务端采用三层缓冲：
+
+- Layer 1: TCP backlog（`server.listen(PORT, 1024)`）
+- Layer 2: Connection Admission Control（令牌桶 + 队列 + 单 IP 限额）
+- Layer 3: 现有 `wss.on('connection')` 业务处理
+
+环境文件与加载顺序：
+
+- `server/.env`：基础参数（默认加载）
+- `server/.env.development`：开发参数（当 `NODE_ENV=development` 时覆盖 `.env`）
+
+### 7.1 环境变量说明
+
+基础服务参数：
+
+| 环境变量 | 默认值 | 注释（作用） |
+|---|---:|---|
+| `GUARDIAN_SERVER_PORT` | `3847` | 服务端监听端口。`server/src/server.js` 使用该参数启动 HTTP + WebSocket 服务。 |
+| `GUARDIAN_SERVER_URL` | `http://localhost:3847` | 桌面端（Electron）加载的服务地址。 |
+
+WebSocket 准入参数：
+
+| 环境变量 | 默认值 | 注释（作用） |
+|---|---:|---|
+| `WS_ADMISSION_MAX_CONCURRENT` | `100` | 同时处于握手处理中的连接上限（并发 `handleUpgrade` 数）。值越大吞吐越高，但更容易挤占事件循环。 |
+| `WS_ADMISSION_PER_SEC` | `200` | 每秒准入速率（令牌补充速率）。超过速率的升级请求进入队列等待。 |
+| `WS_ADMISSION_MAX_QUEUE` | `500` | 升级等待队列最大长度。超过后直接返回 `503`，并附带 `Retry-After`。 |
+| `WS_ADMISSION_MAX_PER_IP` | `20` | 单 IP 在“队列+处理中”总配额，防止单来源打满全局准入队列。 |
+| `WS_ADMISSION_RETRY_AFTER_SEC` | `2` | 被限流时响应头 `Retry-After` 秒数，提示客户端退避后重试。 |
+| `WS_ADMISSION_QUEUE_TIMEOUT_MS` | `10000` | 请求在准入队列中的最大等待时间。超时后返回 `503`。 |
+| `WS_ADMISSION_LOOPBACK_BYPASS` | `1`（默认开启） | 是否对回环地址（`127.0.0.1`/`::1`）绕过 `MAX_PER_IP` 限制。设为 `0` 可关闭（本机测试设为1）。 |
+
+### 7.2 调参建议
+
+- 压测/单机模拟优先确保 `WS_ADMISSION_LOOPBACK_BYPASS=1`，否则会被单 IP 限额提前卡住。
+- 如果排队较多但机器还有余量，先小步提高 `WS_ADMISSION_MAX_CONCURRENT`（例如 `100 -> 120 -> 150`）。
+- 如果 `503` 明显偏多且希望更快放行，逐步提高 `WS_ADMISSION_PER_SEC`。
+- 如果波峰很短，可适当提高 `WS_ADMISSION_MAX_QUEUE`；如果不希望请求等太久，可降低 `WS_ADMISSION_QUEUE_TIMEOUT_MS`。
+
+### 7.3 示例
+
+Linux/macOS:
+
+```bash
+export WS_ADMISSION_MAX_CONCURRENT=120
+export WS_ADMISSION_PER_SEC=240
+export WS_ADMISSION_MAX_QUEUE=800
+export WS_ADMISSION_MAX_PER_IP=30
+export WS_ADMISSION_RETRY_AFTER_SEC=2
+export WS_ADMISSION_QUEUE_TIMEOUT_MS=12000
+export WS_ADMISSION_LOOPBACK_BYPASS=1
+export GUARDIAN_SERVER_PORT=3847
+export GUARDIAN_SERVER_URL=http://localhost:3847
+node server/src/server.js
+```
+
+Windows PowerShell:
+
+```powershell
+$env:WS_ADMISSION_MAX_CONCURRENT = "120"
+$env:WS_ADMISSION_PER_SEC = "240"
+$env:WS_ADMISSION_MAX_QUEUE = "800"
+$env:WS_ADMISSION_MAX_PER_IP = "30"
+$env:WS_ADMISSION_RETRY_AFTER_SEC = "2"
+$env:WS_ADMISSION_QUEUE_TIMEOUT_MS = "12000"
+$env:WS_ADMISSION_LOOPBACK_BYPASS = "1"
+$env:GUARDIAN_SERVER_PORT = "3847"
+$env:GUARDIAN_SERVER_URL = "http://localhost:3847"
+node server\src\server.js
 ```
