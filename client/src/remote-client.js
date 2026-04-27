@@ -12,6 +12,7 @@
 const { WebSocket } = require('ws');
 const os = require('os');
 const crypto = require('crypto');
+const iconvLite = require('iconv-lite');
 
 let ws = null;
 let clientId = null;
@@ -25,6 +26,21 @@ let _processCount = 0;
 let _violations = [];
 
 const listeners = { command: [], message: [], connect: [], disconnect: [] };
+
+// ---------- 工具函数：确保中文正确输出 ----------
+function safeLog(prefix, ...args) {
+  const messages = args.map(arg => {
+    if (typeof arg === 'string') {
+      return arg;
+    }
+    try {
+      return JSON.stringify(arg);
+    } catch (e) {
+      return String(arg);
+    }
+  });
+  console.log(prefix, ...messages);
+}
 
 // ---------- 事件 ----------
 function on(evt, cb) { if (listeners[evt]) listeners[evt].push(cb); }
@@ -41,17 +57,17 @@ function _doConnect() {
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
 
-  console.log(`[Remote] 连接管控服务器: ${serverUrl}`);
+  safeLog('[Remote] 连接管控服务器:', serverUrl);
   try {
     ws = new WebSocket(serverUrl);
-  } catch(e) {
-    console.error('[Remote] WebSocket 创建失败', e.message);
+  } catch (e) {
+    console.error('[Remote] WebSocket 创建失败:', e.message);
     _scheduleReconnect();
     return;
   }
 
   ws.on('open', () => {
-    console.log('[Remote] 已连接管控服务器');
+    safeLog('[Remote] 已连接管控服务器');
     emit('connect');
     // 发送绑定信息
     send({ type: 'bind', studentId, hostname: os.hostname() });
@@ -71,12 +87,12 @@ function _doConnect() {
   ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
-    console.log('[Remote] 收到消息:', msg.type);
+    safeLog('[Remote] 收到消息:', msg.type);
 
     switch (msg.type) {
       case 'welcome':
         clientId = msg.clientId;
-        console.log('[Remote] 获得 clientId:', clientId);
+        safeLog('[Remote] 获得 clientId:', clientId);
         break;
 
       case 'heartbeat-ack':
@@ -100,12 +116,12 @@ function _doConnect() {
         break;
 
       default:
-        console.log('[Remote] 未知消息类型:', msg.type);
+        safeLog('[Remote] 未知消息类型:', msg.type);
     }
   });
 
   ws.on('close', () => {
-    console.log('[Remote] 连接断开');
+    safeLog('[Remote] 连接断开');
     if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
     emit('disconnect');
     _scheduleReconnect();
@@ -121,7 +137,7 @@ function _scheduleReconnect() {
   if (reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    console.log('[Remote] 尝试重新连接...');
+    safeLog('[Remote] 尝试重新连接...');
     _doConnect();
   }, 5000);
 }

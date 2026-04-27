@@ -10,6 +10,7 @@
     "build": "electron-builder --win --dir"
   },
   "dependencies": {
+    "iconv-lite": "^0.7.2",
     "ws": "^8.20.0"
   },
   "devDependencies": {
@@ -34,14 +35,18 @@
       {
         "from": "data",
         "to": "data",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
       "target": [
         {
           "target": "dir",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "src/renderer/icon.png"
